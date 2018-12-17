@@ -172,9 +172,9 @@ void GrowRegions(void **costs, short **flows, long nrow, long ncol,
   long i, row, col, maxcol;
   long arcrow, arccol, arcnum, fromdist, arcdist;
   long regioncounter, *regionsizes, regionsizeslen, *thisregionsize;
-  long closestregiondist, closestregion, lastfromdist;
+  long closestregiondist, closestregion=0, lastfromdist;
   long costthresh, minsize, maxcost;
-  short **regions;
+  short **regions=NULL;
   nodeT **nodes;
   nodeT *source, *from, *to, *ground;
   char regionfile[MAXSTRLEN];
@@ -887,8 +887,8 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
 		   long nlines, long linelen){
 
   long tilerow, tilecol, ntilerow, ntilecol, ntiles, rowovrlp, colovrlp;
-  long i, j, k, ni, nj, dummylong, costtypesize;
-  long nrow, ncol, prevnrow, prevncol, nextnrow, nextncol;
+  long i, j, k, ni, nj, dummylong, costtypesize=0;
+  long nrow, ncol, prevnrow=0, prevncol, nextnrow, nextncol;
   long n, ncycle, nflowdone, nflow, candidatelistsize, candidatebagsize;
   long nnodes, maxnflowcycles, arclen, narcs, sourcetilenum, flowmax;
   long *totarclens;
@@ -1195,7 +1195,7 @@ void ReadNextRegion(long tilerow, long tilecol, long nlines, long linelen,
 		    void ***nextcostsptr, 
 		    long *nextnrowptr, long *nextncolptr){
 
-  long nexttilelinelen, nexttilenlines, costtypesize;
+  long nexttilelinelen, nexttilenlines, costtypesize=0;
   tileparamT nexttileparams[1];
   outfileT nexttileoutfiles[1];
   char nextfile[MAXSTRLEN], tempstring[MAXTMPSTRLEN];
@@ -1315,7 +1315,7 @@ void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
 			    float *unwphaseabove, float *unwphasebelow,
 			    void *costsabove, void *costsbelow){
 
-  long ni, nj, readtilelinelen, readtilenlines, costtypesize;
+  long ni, nj, readtilelinelen, readtilenlines, costtypesize=0;
   long ntilerow, ntilecol, rowovrlp, colovrlp;
   tileparamT tileparams[1];
   outfileT outfilesabove[1], outfilesbelow[1];
@@ -1487,7 +1487,7 @@ void TraceRegions(short **regions, short **nextregions, short **lastregions,
 		  short *nscndryarcs, long *totarclens, short **bulkoffsets, 
 		  paramT *params){
 
-  long i, j, row, col, nnrow, nncol, tilenum, costtypesize;
+  long i, j, row, col, nnrow, nncol, tilenum, costtypesize=0;
   long nnewnodes, nnewarcs, npathsout, flowmax, totarclen;
   long nupdatednontilenodes, updatednontilenodesize, ntilecol;
   short **flows;
@@ -2383,7 +2383,7 @@ void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
   long mincost, mincostflow;
   long *scndrycostarr;
   long double templongdouble;
-  double sigsq, sumsigsqinv, tempdouble, tileedgearcweight;
+  double sigsq=0, sumsigsqinv, tempdouble, tileedgearcweight;
   short **flows;
   void **costs;
   nodeT *tempnode, *primarytail, *scndrytail, *scndryhead;
@@ -2922,7 +2922,7 @@ void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes,
   FILE *outfp;
   float **unwphase, **tileunwphase, **mag, **tilemag;
   float *outline;
-  long row, col, colstart, nrow, ncol, nnrow, nncol, maxcol;
+  long row, col, colstart, nrow=0, ncol, nnrow, nncol, maxcol;
   long readtilelinelen, readtilenlines, nextcoloffset, nextrowoffset;
   long tilerow, tilecol, ntilerow, ntilecol, rowovrlp, colovrlp;
   long ni, nj, tilenum;

@@ -348,15 +348,15 @@ file whose name is compiled into the program):
 .fi
 
 Unwrap the same file as above, but use brightness information from the
-file ``ampfile,'' set the perpendicular baseline to -165 m at
+file ``ampfile,'' set the perpendicular baseline to \-165 m at
 midswath, and place the output in a file called ``unwrappedfile''
 (coherence data are generated automatically if ``wrappedfile''
 contains complex data and ``ampfile'' contains amplitude data from
 both SAR images):
 
 .nf
-	snaphu wrappedfile 1024 -a ampfile \\\ 
-		-b -165 -o unwrappedfile
+	snaphu wrappedfile 1024 \-a ampfile \\\ 
+		\-b \-165 \-o unwrappedfile
 .fi
 
 Unwrap the interferogram as above, but read correlation
@@ -364,8 +364,8 @@ information from the file ``corrfile'' instead of generating it from
 the interferogram and amplitude data:
 
 .nf
-	snaphu wrappedfile 1024 -a ampfile -c corrfile \\\ 
-		-b -165 -o unwrappedfile
+	snaphu wrappedfile 1024 \-a ampfile \-c corrfile \\\ 
+		\-b \-165 \-o unwrappedfile
 .fi
 
 The following is equivalent to the previous example, but input
@@ -377,25 +377,25 @@ displayed:
 	# This is a comment line which will be ignored
 	AMPFILE      ampfile
 	CORRFILE     corrfile
-	BPERP        -165
+	BPERP        \-165
 	OUTFILE      unwrappedfile
 	<Ctrl-D>
 
-	snaphu -v -f configfile wrappedfile 1024
+	snaphu \-v \-f configfile wrappedfile 1024
 .fi
 
 Unwrap the same interferogram, but use only the MST initialization
 (with scalar statistical weights) and write the output to ``mstfile'':
 
 .nf
-	snaphu -f configfile -i wrappedfile 1024 -o mstfile
+	snaphu \-f configfile \-i wrappedfile 1024 \-o mstfile
 .fi
 
 Read the unwrapped data in ``mstfile'' and use that as the
 initialization to the modified network-simplex solver:
 
 .nf
-	snaphu -f configfile -u mstfile 1024 -o unwrappedfile
+	snaphu \-f configfile \-u mstfile 1024 \-o unwrappedfile
 .fi
 
 Note that in the previous two examples, the output file name in the
@@ -408,7 +408,7 @@ Unwrap the interferogram as above, but use the MCF algorithm for
 initialization:
 
 .nf
-	snaphu -f configfile wrappedfile 1024 --mcf
+	snaphu \-f configfile wrappedfile 1024 \--mcf
 .fi
 
 Unwrap the interferogram once again, but first flatten it with the
@@ -416,7 +416,7 @@ unwrapped data in ``estfile,'' then reinsert the subtracted phase
 after unwrapping:
 
 .nf
-	snaphu -f configfile wrappedfile 1024 -e estfile
+	snaphu \-f configfile wrappedfile 1024 \-e estfile
 .fi
 
 The following assumes that the wrapped input interferogram measures
@@ -424,14 +424,14 @@ deformation, not topography.  Unwrap the interferogram with the given
 correlation data:
 
 .nf
-	snaphu -d wrappedfile 1024 -c corrfile 
+	snaphu \-d wrappedfile 1024 \-c corrfile 
 .fi
 
 Unwrap the input interferogram by minimizing the unweighted congruent
 L2 norm:
 
 .nf
-	snaphu -p 2 -n wrappedfile 1024
+	snaphu \-p 2 \-n wrappedfile 1024
 .fi
 
 Unwrap the interferogram as a three-by-four set of tiles that overlap
@@ -439,8 +439,8 @@ by 30 pixels, with the specified configuration file, using two
 processors:
 
 .nf
-	snaphu wrappedfile 1024 -f configfile \\\ 
-		--tile 3 4 30 30 --nproc 2
+	snaphu wrappedfile 1024 \-f configfile \\\ 
+		\--tile 3 4 30 30 \--nproc 2
 .fi
 
 .SH "HINTS AND TIPS"

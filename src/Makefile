@@ -13,8 +13,9 @@
 # If you specify -D NO_CS2, the program will be compiled without the
 # CS2 MCF solver module.
 
-CC		=	cc
-CFLAGS		=	-static -O3 # -D NO_CS2
+#CC		=	cc
+#CFLAGS		=	-static -O3 # -D NO_CS2
+CFLAGS		+= -O3 # -D NO_CS2
 LIBS		=	-lm
 BINDIR		=	../bin
 INSTALLDIR	=	/usr/local/bin
@@ -32,7 +33,7 @@ OBJS		=	snaphu_tile.o \
 all:		$(SNAPHU)
 
 $(SNAPHU):	snaphu.c $(OBJS) snaphu.h Makefile $(BINDIR)
-		$(CC) $(CFLAGS) \
+		$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) \
 		snaphu.c \
 		$(OBJS) \
 		-o $(SNAPHU) \

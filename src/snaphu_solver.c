@@ -53,7 +53,7 @@ long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
   candidateT *candidatelist, *candidatebag, *tempcandidateptr;
   nodeT *from, *to, *cycleapex, *node1, *node2, *leavingparent, *leavingchild;
   nodeT *root, *mntpt, *oldmntpt, *skipthread, *tempnode1, *tempnode2;
-  nodeT *firstfromnode, *firsttonode;
+  nodeT *firstfromnode=NULL, *firsttonode=NULL;
   nodeT **apexlist;
   float **unwrappedphase;
 
@@ -2203,7 +2203,7 @@ long DischargeTree(nodeT *source, short **mstcosts, short **flows,
 		   signed char **residue, signed char **arcstatus, 
 		   nodeT **nodes, nodeT *ground, long nrow, long ncol){
 
-  long row, col, todir, arcrow, arccol, arcdir;
+  long row, col=0, todir=0, arcrow, arccol, arcdir;
   long arcnum, upperarcnum, ngroundarcs;
   nodeT *from, *to, *nextnode;
   nodesuppT **nodesupp;

@@ -40,11 +40,11 @@ void BuildCostArrays(void ***costsptr, short ***mstcostsptr,
 		     outfileT *outfiles){
   
   long row, col, maxcol, tempcost;
-  long poscost, negcost, costtypesize;
+  long poscost, negcost, costtypesize=0;
   float **pwr, **corr;
-  short **weights, **rowweight, **colweight, **scalarcosts;
-  void **costs, **rowcost, **colcost;
-  void (*CalcStatCost)();
+  short **weights, **rowweight, **colweight, **scalarcosts=NULL;
+  void **costs, **rowcost=NULL, **colcost=NULL;
+  void (*CalcStatCost)()=NULL;
 
   /* read weights */
   weights=NULL;

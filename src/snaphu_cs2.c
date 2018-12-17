@@ -637,6 +637,7 @@ register double p_max,    /* current maximal price */
                 i_price,  /* price of node  i */
                 dp;       /* current arc partial residual cost */
 
+a_max = NULL;
 p_max = price_min;
 i_price = i -> price;
 
