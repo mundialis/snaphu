@@ -1,7 +1,11 @@
 SNAPHU
-Statistical-Cost, Netowrk-Flow Algorithm for Phase Unwrapping
+Statistical-Cost, Network-Flow Algorithm for Phase Unwrapping
 Author: Curtis W. Chen
 Version 1.4.2, January 2003
+
+Version 1.4.2-2, Apr 2013 - Updated by Debian, https://packages.debian.org/source/jessie/snaphu
+
+Version 1.4.2b, 2018 - Updated by PCIGeomatics for 16 bit integer overflow, https://github.com/PCIGeomatics/snaphu/commit/4fda49df11f7b7376e6914e749a3836763355376
 
 
 Contents

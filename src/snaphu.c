@@ -43,19 +43,22 @@ FILE *sp0, *sp1, *sp2, *sp3;
 nodeT NONTREEARC[1];
 
 /* pointers to functions which calculate arc costs */
-void (*CalcCost)();
-long (*EvalCost)();
+void (*CalcCost)(void**, long int, long int, long int,
+                 long int, long int, paramT*, long int*, long int*);
+long (*EvalCost)(void **, int **, long, long,  long, paramT*);
 
 /* pointers to functions for tailoring network solver to specific topologies */
-nodeT *(*NeighborNode)();
-void (*GetArc)();
+nodeT *(*NeighborNode)(nodeT *, long, long*, nodeT**, nodeT*, long*,
+                       long*, long*, long, long, nodesuppT**);
+void (*GetArc)(nodeT*, nodeT*, long*, long*,
+               long*, long, long, nodesuppT**);
 
 
 /***************************/
 /* main program for snaphu */
 /***************************/
 
-int main(int argc, char **argv){
+int main(int argc, const char **argv){
 
   /* variable declarations */
   infileT infiles[1];
@@ -119,7 +122,7 @@ void Unwrap(infileT *infiles, outfileT *outfiles, paramT *params,
   long nexttilerow, nexttilecol, ntilerow, ntilecol, nthreads, nchildren;
   long sleepinterval;
   tileparamT tileparams[1];
-  outfileT tileoutfiles[1];
+  outfileT tileoutfiles[1] = {};
   pid_t pid;
   int childstatus;
   double tilecputimestart;
@@ -155,6 +158,7 @@ void Unwrap(infileT *infiles, outfileT *outfiles, paramT *params,
       MakeTileDir(params,outfiles);
 
       /* different code for parallel or nonparallel operation */
+      #if 0
       if(nthreads>1){
 
 	/* parallel code */
@@ -255,7 +259,9 @@ void Unwrap(infileT *infiles, outfileT *outfiles, paramT *params,
 	/* return signal handlers to default behavior */
 	CatchSignals(SIG_DFL);
 
-      }else{
+      }else
+      #endif
+      {
 
 	/* nonparallel code */
 
@@ -298,8 +304,8 @@ void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
   long nrow, ncol, nnoderow, narcrow, n, ngroundarcs, iincrcostfile;
   long nflow, ncycle, mostflow, nflowdone;
   long candidatelistsize, candidatebagsize;
-  short *nnodesperrow, *narcsperrow;
-  short **flows, **mstcosts;
+  int *nnodesperrow, *narcsperrow;
+  int **flows, **mstcosts;
   float **wrappedphase, **unwrappedphase, **mag, **unwrappedest;
   incrcostT **incrcosts;
   void **costs;
@@ -340,7 +346,7 @@ void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
 
   /* if in quantify-only mode, evaluate cost of unwrapped input then return */
   if(params->eval){
-    mostflow=Short2DRowColAbsMax(flows,nrow,ncol);
+    mostflow=Int2DRowColAbsMax(flows,nrow,ncol);
     fprintf(sp1,"Maximum flow on network: %ld\n",mostflow);
     totalcost=EvaluateTotalCost(costs,flows,nrow,ncol,NULL,params);
     fprintf(sp1,"Total solution cost: %.9g\n",(double )totalcost);
@@ -447,7 +453,9 @@ void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
   /* if we have a single tile, trap signals for dumping results */
   if(params->ntilerow==1 && params->ntilecol==1){
     signal(SIGINT,SetDump);
+#ifdef __GNUC__
     signal(SIGHUP,SetDump);
+#endif
   }
 
   /* main loop: loop over flow increments and sources */
@@ -497,7 +505,7 @@ void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
     }
 
     /* find maximum flow on network */
-    mostflow=Short2DRowColAbsMax(flows,nrow,ncol);
+    mostflow=Int2DRowColAbsMax(flows,nrow,ncol);
 
     /* break if we're done with all flow increments or problem is convex */
     if(nflowdone>=params->maxflow || nflowdone>=mostflow || params->p>=1.0){
@@ -516,7 +524,7 @@ void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
     if(strlen(outfiles->flowfile)){
       FlipFlowArraySign(flows,params,nrow,ncol);
       Write2DRowColArray((void **)flows,outfiles->flowfile,nrow,ncol,
-			 sizeof(short));
+			 sizeof(int));
       FlipFlowArraySign(flows,params,nrow,ncol);
     }
 
@@ -526,7 +534,9 @@ void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
   /* if we have single tile, return signal handlers to default behavior */
   if(params->ntilerow==1 && params->ntilecol==1){
     signal(SIGINT,SIG_DFL);
+#ifdef __GNUC__
     signal(SIGHUP,SIG_DFL);
+#endif
   }
 
   /* free some memory */

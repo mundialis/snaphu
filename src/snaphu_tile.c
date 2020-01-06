@@ -23,7 +23,6 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-
 #include "snaphu.h"
 
 
@@ -37,8 +36,8 @@ void SetupTile(long nlines, long linelen, paramT *params,
 	       outfileT *tileoutfiles, long tilerow, long tilecol){
 
   long ni, nj;
-  char tempstring[MAXTMPSTRLEN], path[MAXSTRLEN], basename[MAXSTRLEN];
-  char *tiledir;
+  char tempstring[MAXTMPSTRLEN] = {}, path[MAXSTRLEN] = {}, basename[MAXSTRLEN] = {};
+  const char *tiledir;
 
 
   /* set parameters for current tile */
@@ -166,15 +165,15 @@ void SetupTile(long nlines, long linelen, paramT *params,
  * Grows contiguous regions demarcated by arcs whose residual costs are
  * less than some threshold.  Numbers the regions sequentially from 0.
  */
-void GrowRegions(void **costs, short **flows, long nrow, long ncol, 
+void GrowRegions(void **costs, int **flows, long nrow, long ncol, 
 		 incrcostT **incrcosts, outfileT *outfiles, paramT *params){
 
   long i, row, col, maxcol;
   long arcrow, arccol, arcnum, fromdist, arcdist;
   long regioncounter, *regionsizes, regionsizeslen, *thisregionsize;
-  long closestregiondist, closestregion=0, lastfromdist;
+  long closestregiondist, closestregion, lastfromdist;
   long costthresh, minsize, maxcost;
-  short **regions=NULL;
+  int **regions = NULL;
   nodeT **nodes;
   nodeT *source, *from, *to, *ground;
   char regionfile[MAXSTRLEN];
@@ -371,12 +370,12 @@ void GrowRegions(void **costs, short **flows, long nrow, long ncol,
   fprintf(sp2,"Tile partitioned into %ld regions\n",regioncounter+1);
 
   /* write regions array */
-  /* write as shorts if multiple tiles */
+  /* write as ints if multiple tiles */
   if(params->ntilerow > 1 || params->ntilecol>1){
-    regions=(short **)Get2DMem(nrow,ncol,sizeof(short *),sizeof(short));
+    regions=(int **)Get2DMem(nrow,ncol,sizeof(int *),sizeof(int));
     for(row=0;row<nrow;row++){
       for(col=0;col<ncol;col++){
-	if(nodes[row][col].incost>LARGESHORT){
+	if(nodes[row][col].incost>LARGEINT){
 	  fprintf(sp0,
 		  "Number of regions in tile exceeds max allowed\nAbort\n");
 	  exit(ABNORMAL_EXIT);
@@ -386,7 +385,7 @@ void GrowRegions(void **costs, short **flows, long nrow, long ncol,
     }
     sprintf(regionfile,"%s%s",outfiles->outfile,REGIONSUFFIX);
     fprintf(sp2,"Writing region data to file %s\n",regionfile);
-    Write2DArray((void **)regions,regionfile,nrow,ncol,sizeof(short));
+    Write2DArray((void **)regions,regionfile,nrow,ncol,sizeof(int));
   }
 
   /* free memory */
@@ -404,7 +403,7 @@ void GrowRegions(void **costs, short **flows, long nrow, long ncol,
  * Writes out byte file of connected component mask, with 0 for any pixels
  * not assigned to a component.
  */
-void GrowConnCompsMask(void **costs, short **flows, long nrow, long ncol, 
+void GrowConnCompsMask(void **costs, int **flows, long nrow, long ncol, 
 		       incrcostT **incrcosts, outfileT *outfiles, 
 		       paramT *params){
 
@@ -664,9 +663,9 @@ long ThickenCosts(incrcostT **incrcosts, long nrow, long ncol){
 	n+=1.0;
       }
       templong=LRound(templong/n);
-      if(templong>LARGESHORT){
+      if(templong>LARGEINT){
         fprintf(sp0,"WARNING: COSTS CLIPPED IN ThickenCosts()\n");
-	incrcosts[row][col].negcost=LARGESHORT;
+	incrcosts[row][col].negcost=LARGEINT;
       }else{
 	incrcosts[row][col].negcost=templong;
       }
@@ -690,9 +689,9 @@ long ThickenCosts(incrcostT **incrcosts, long nrow, long ncol){
 	n+=1.0;
       }
       templong=LRound(templong/n);
-      if(templong>LARGESHORT){
+      if(templong>LARGEINT){
         fprintf(sp0,"WARNING: COSTS CLIPPED IN ThickenCosts()\n");
-	incrcosts[row][col].negcost=LARGESHORT;
+	incrcosts[row][col].negcost=LARGEINT;
       }else{      
 	incrcosts[row][col].negcost=templong;
       }
@@ -887,8 +886,8 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
 		   long nlines, long linelen){
 
   long tilerow, tilecol, ntilerow, ntilecol, ntiles, rowovrlp, colovrlp;
-  long i, j, k, ni, nj, dummylong, costtypesize=0;
-  long nrow, ncol, prevnrow=0, prevncol, nextnrow, nextncol;
+  long i, j, k, ni, nj, dummylong, costtypesize;
+  long nrow, ncol, prevnrow, prevncol, nextnrow, nextncol;
   long n, ncycle, nflowdone, nflow, candidatelistsize, candidatebagsize;
   long nnodes, maxnflowcycles, arclen, narcs, sourcetilenum, flowmax;
   long *totarclens;
@@ -898,9 +897,9 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
   float *unwphaseabove, *unwphasebelow;
   void **costs, **nextcosts, **lastcosts, **tempcosts;
   void *costsabove, *costsbelow;
-  short **scndryflows, **bulkoffsets, **regions, **nextregions, **lastregions;
-  short **tempregions, *regionsbelow, *regionsabove;
-  short *nscndrynodes, *nscndryarcs;
+  int **scndryflows, **bulkoffsets, **regions, **nextregions, **lastregions;
+  int **tempregions, *regionsbelow, *regionsabove;
+  int *nscndrynodes, *nscndryarcs;
   incrcostT **incrcosts;
   totalcostT totalcost, oldtotalcost;
   nodeT *source;
@@ -935,11 +934,11 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
   }
 
   /* get memory */
-  regions=(short **)Get2DMem(ni,nj,sizeof(short *),sizeof(short));
-  nextregions=(short **)Get2DMem(ni,nj,sizeof(short *),sizeof(short));
-  lastregions=(short **)Get2DMem(ni,nj,sizeof(short *),sizeof(short));
-  regionsbelow=(short *)MAlloc(nj*sizeof(short));
-  regionsabove=(short *)MAlloc(nj*sizeof(short));
+  regions=(int **)Get2DMem(ni,nj,sizeof(int *),sizeof(int));
+  nextregions=(int **)Get2DMem(ni,nj,sizeof(int *),sizeof(int));
+  lastregions=(int **)Get2DMem(ni,nj,sizeof(int *),sizeof(int));
+  regionsbelow=(int *)MAlloc(nj*sizeof(int));
+  regionsabove=(int *)MAlloc(nj*sizeof(int));
   unwphase=(float **)Get2DMem(ni,nj,sizeof(float *),sizeof(float));
   nextunwphase=(float **)Get2DMem(ni,nj,sizeof(float *),sizeof(float));
   lastunwphase=(float **)Get2DMem(ni,nj,sizeof(float *),sizeof(float));
@@ -949,11 +948,11 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
   nodesupp=(nodesuppT **)MAlloc(ntiles*sizeof(nodesuppT *));
   scndryarcs=(scndryarcT **)MAlloc(ntiles*sizeof(scndryarcT *));
   scndrycosts=(long ***)MAlloc(ntiles*sizeof(long **));
-  nscndrynodes=(short *)MAlloc(ntiles*sizeof(short));
-  nscndryarcs=(short *)MAlloc(ntiles*sizeof(short));
+  nscndrynodes=(int *)MAlloc(ntiles*sizeof(int));
+  nscndryarcs=(int *)MAlloc(ntiles*sizeof(int));
   totarclens=(long *)MAlloc(ntiles*sizeof(long));
-  bulkoffsets=(short **)Get2DMem(ntilerow,ntilecol,sizeof(short *),
-				 sizeof(short));
+  bulkoffsets=(int **)Get2DMem(ntilerow,ntilecol,sizeof(int *),
+				 sizeof(int));
   costs=(void **)Get2DRowColMem(ni+2,nj+2,sizeof(void *),costtypesize);
   nextcosts=(void **)Get2DRowColMem(ni+2,nj+2,sizeof(void *),costtypesize);
   lastcosts=(void **)Get2DRowColMem(ni+2,nj+2,sizeof(void *),costtypesize);
@@ -1054,13 +1053,13 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
 
 
   /* get memory for nongrid arrays of secondary network problem */
-  scndryflows=(short **)MAlloc(ntiles*sizeof(short *));
+  scndryflows=(int **)MAlloc(ntiles*sizeof(int *));
   iscandidate=(signed char **)MAlloc(ntiles*sizeof(signed char*));
   scndryapexes=(nodeT ***)MAlloc(ntiles*sizeof(nodeT **));
   incrcosts=(incrcostT **)MAlloc(ntiles*sizeof(incrcostT *));
   nnodes=0;
   for(i=0;i<ntiles;i++){
-    scndryflows[i]=(short *)CAlloc(nscndryarcs[i],sizeof(short));
+    scndryflows[i]=(int *)CAlloc(nscndryarcs[i],sizeof(int));
     iscandidate[i]=(signed char *)MAlloc(nscndryarcs[i]*sizeof(signed char));
     scndryapexes[i]=(nodeT **)MAlloc(nscndryarcs[i]*sizeof(nodeT *));
     incrcosts[i]=(incrcostT *)MAlloc(nscndryarcs[i]*sizeof(incrcostT));
@@ -1177,10 +1176,10 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
       for(tilecol=0;tilecol<ntilecol;tilecol++){
 	sprintf(filename,"%s/%s%ld_%ld",
 		params->tiledir,LOGFILEROOT,tilerow,tilecol);
-	unlink(filename);
+	remove(filename);
       }
     }
-    rmdir(params->tiledir);
+    remove(params->tiledir);
   }
 
 }
@@ -1191,11 +1190,11 @@ void AssembleTiles(outfileT *outfiles, paramT *params,
  */
 void ReadNextRegion(long tilerow, long tilecol, long nlines, long linelen,
 		    outfileT *outfiles, paramT *params, 
-		    short ***nextregionsptr, float ***nextunwphaseptr,
+		    int ***nextregionsptr, float ***nextunwphaseptr,
 		    void ***nextcostsptr, 
 		    long *nextnrowptr, long *nextncolptr){
 
-  long nexttilelinelen, nexttilenlines, costtypesize=0;
+  long nexttilelinelen, nexttilenlines, costtypesize;
   tileparamT nexttileparams[1];
   outfileT nexttileoutfiles[1];
   char nextfile[MAXSTRLEN], tempstring[MAXTMPSTRLEN];
@@ -1228,7 +1227,7 @@ void ReadNextRegion(long tilerow, long tilecol, long nlines, long linelen,
   StrNCopy(nextfile,tempstring,MAXSTRLEN);
   Read2DArray((void ***)nextregionsptr,nextfile,
 	      nexttilelinelen,nexttilenlines,
-	      nexttileparams,sizeof(short *),sizeof(short));
+	      nexttileparams,sizeof(int *),sizeof(int));
 
   /* read unwrapped phase data */
   if(TMPTILEOUTFORMAT==ALT_LINE_DATA){
@@ -1311,17 +1310,17 @@ void SetTileReadParams(tileparamT *tileparams, long nexttilenlines,
  */
 void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines, 
 			    long linelen, paramT *params, outfileT *outfiles, 
-			    short *regionsabove, short *regionsbelow,
+			    int *regionsabove, int *regionsbelow,
 			    float *unwphaseabove, float *unwphasebelow,
 			    void *costsabove, void *costsbelow){
 
-  long ni, nj, readtilelinelen, readtilenlines, costtypesize=0;
+  long ni, nj, readtilelinelen, readtilenlines, costtypesize;
   long ntilerow, ntilecol, rowovrlp, colovrlp;
   tileparamT tileparams[1];
   outfileT outfilesabove[1], outfilesbelow[1];
   float **unwphaseaboveptr, **unwphasebelowptr;
   void **costsaboveptr, **costsbelowptr;
-  short **regionsaboveptr, **regionsbelowptr;
+  int **regionsaboveptr, **regionsbelowptr;
   char tempstring[MAXTMPSTRLEN], readregionfile[MAXSTRLEN];
   char path[MAXSTRLEN], basename[MAXSTRLEN];
 
@@ -1389,7 +1388,7 @@ void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
     StrNCopy(readregionfile,tempstring,MAXSTRLEN);
     Read2DArray((void ***)&regionsaboveptr,readregionfile,
 		readtilelinelen,readtilenlines,
-		tileparams,sizeof(short *),sizeof(short));
+		tileparams,sizeof(int *),sizeof(int));
 
     /* read unwrapped phase data */
     if(TMPTILEOUTFORMAT==ALT_LINE_DATA){
@@ -1413,7 +1412,7 @@ void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
 
     /* remove temporary tile cost file unless told to save it */
     if(params->rmtmptile && !strlen(outfiles->costoutfile)){
-      unlink(outfilesabove->costoutfile);
+      remove(outfilesabove->costoutfile);
     }
   }
 
@@ -1432,7 +1431,7 @@ void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
     StrNCopy(readregionfile,tempstring,MAXSTRLEN);
     Read2DArray((void ***)&regionsbelowptr,readregionfile,
 		readtilelinelen,readtilenlines,
-		tileparams,sizeof(short *),sizeof(short));
+		tileparams,sizeof(int *),sizeof(int));
 
     /* read unwrapped phase data */
     if(TMPTILEOUTFORMAT==ALT_LINE_DATA){
@@ -1459,7 +1458,7 @@ void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
     if(params->rmtmptile && !strlen(outfiles->costoutfile)){
       SetupTile(nlines,linelen,params,tileparams,outfiles,outfilesbelow,
 		tilerow,tilecol);
-      unlink(outfilesbelow->costoutfile);
+      remove(outfilesbelow->costoutfile);
     }
   }
 }
@@ -1475,24 +1474,24 @@ void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
  * are calculated from combining adjacent cost parameters, not from 
  * using the exact method in BuildCostArrays().
  */
-void TraceRegions(short **regions, short **nextregions, short **lastregions, 
-		  short *regionsabove, short *regionsbelow, float **unwphase, 
+void TraceRegions(int **regions, int **nextregions, int **lastregions, 
+		  int *regionsabove, int *regionsbelow, float **unwphase, 
 		  float **nextunwphase, float **lastunwphase, 
 		  float *unwphaseabove, float *unwphasebelow, void **costs, 
 		  void **nextcosts, void **lastcosts, void *costsabove, 
 		  void *costsbelow, long prevnrow, long prevncol, long tilerow,
 		  long tilecol, long nrow, long ncol, nodeT **scndrynodes,
 		  nodesuppT **nodesupp, scndryarcT **scndryarcs, 
-		  long ***scndrycosts, short *nscndrynodes, 
-		  short *nscndryarcs, long *totarclens, short **bulkoffsets, 
+		  long ***scndrycosts, int *nscndrynodes, 
+		  int *nscndryarcs, long *totarclens, int **bulkoffsets, 
 		  paramT *params){
 
-  long i, j, row, col, nnrow, nncol, tilenum, costtypesize=0;
+  long i, j, row, col, nnrow, nncol, tilenum, costtypesize;
   long nnewnodes, nnewarcs, npathsout, flowmax, totarclen;
   long nupdatednontilenodes, updatednontilenodesize, ntilecol;
-  short **flows;
-  short **rightedgeflows, **loweredgeflows, **leftedgeflows, **upperedgeflows;
-  short *inontilenodeoutarc;
+  int **flows;
+  int **rightedgeflows, **loweredgeflows, **leftedgeflows, **upperedgeflows;
+  int *inontilenodeoutarc;
   void **rightedgecosts, **loweredgecosts, **leftedgecosts, **upperedgecosts;
   nodeT **primarynodes, **updatednontilenodes;
   nodeT *from, *to, *nextnode, *tempnode;
@@ -1537,12 +1536,12 @@ void TraceRegions(short **regions, short **nextregions, short **lastregions,
 
   /* get memory */
   updatednontilenodes=(nodeT **)MAlloc(updatednontilenodesize*sizeof(nodeT *));
-  inontilenodeoutarc=(short *)MAlloc(updatednontilenodesize*sizeof(short));
-  flows=(short **)Get2DRowColMem(nrow+1,ncol+1,sizeof(short *),sizeof(short));
-  rightedgeflows=(short **)Get2DMem(nrow,1,sizeof(short *),sizeof(short));
-  leftedgeflows=(short **)Get2DMem(nrow,1,sizeof(short *),sizeof(short));
-  upperedgeflows=(short **)Get2DMem(1,ncol,sizeof(short *),sizeof(short));
-  loweredgeflows=(short **)Get2DMem(1,ncol,sizeof(short *),sizeof(short));
+  inontilenodeoutarc=(int *)MAlloc(updatednontilenodesize*sizeof(int));
+  flows=(int **)Get2DRowColMem(nrow+1,ncol+1,sizeof(int *),sizeof(int));
+  rightedgeflows=(int **)Get2DMem(nrow,1,sizeof(int *),sizeof(int));
+  leftedgeflows=(int **)Get2DMem(nrow,1,sizeof(int *),sizeof(int));
+  upperedgeflows=(int **)Get2DMem(1,ncol,sizeof(int *),sizeof(int));
+  loweredgeflows=(int **)Get2DMem(1,ncol,sizeof(int *),sizeof(int));
   rightedgecosts=(void **)Get2DMem(nrow,1,sizeof(void *),costtypesize);
   leftedgecosts=(void **)Get2DMem(nrow,1,sizeof(void *),costtypesize);
   upperedgecosts=(void **)Get2DMem(1,ncol,sizeof(void *),costtypesize);
@@ -1705,9 +1704,9 @@ void TraceRegions(short **regions, short **nextregions, short **lastregions,
  * Check all outgoing arcs to see how many paths out there are. 
  */
 long FindNumPathsOut(nodeT *from, paramT *params, long tilerow, long tilecol, 
-		     long nnrow, long nncol, short **regions, 
-		     short **nextregions, short **lastregions,
-		     short *regionsabove, short *regionsbelow, long prevncol){
+		     long nnrow, long nncol, int **regions, 
+		     int **nextregions, int **lastregions,
+		     int *regionsabove, int *regionsbelow, long prevncol){
 
   long npathsout, ntilerow, ntilecol, fromrow, fromcol;
 
@@ -1785,9 +1784,9 @@ long FindNumPathsOut(nodeT *from, paramT *params, long tilerow, long tilecol,
  * -------------------------------------
  */
 void RegionTraceCheckNeighbors(nodeT *from, nodeT **nextnodeptr, 
-			       nodeT **primarynodes, short **regions, 
-			       short **nextregions, short **lastregions, 
-			       short *regionsabove, short *regionsbelow,  
+			       nodeT **primarynodes, int **regions, 
+			       int **nextregions, int **lastregions, 
+			       int *regionsabove, int *regionsbelow,  
 			       long tilerow, long tilecol, long nnrow, 
 			       long nncol, nodeT **scndrynodes, 
 			       nodesuppT **nodesupp, scndryarcT **scndryarcs, 
@@ -1796,14 +1795,14 @@ void RegionTraceCheckNeighbors(nodeT *from, nodeT **nextnodeptr,
 			       long prevnrow, long prevncol, paramT *params, 
 			       void **costs, void **rightedgecosts, 
 			       void **loweredgecosts, void **leftedgecosts, 
-			       void **upperedgecosts, short **flows, 
-			       short **rightedgeflows, short **loweredgeflows,
-			       short **leftedgeflows, short **upperedgeflows,
+			       void **upperedgecosts, int **flows, 
+			       int **rightedgeflows, int **loweredgeflows,
+			       int **leftedgeflows, int **upperedgeflows,
 			       long ***scndrycosts, 
 			       nodeT ***updatednontilenodesptr, 
 			       long *nupdatednontilenodesptr, 
 			       long *updatednontilenodesizeptr,
-			       short **inontilenodeoutarcptr, 
+			       int **inontilenodeoutarcptr, 
 			       long *totarclenptr){
 
   long fromrow, fromcol;
@@ -1936,13 +1935,13 @@ void RegionTraceCheckNeighbors(nodeT *from, nodeT **nextnodeptr,
 void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts, 
 		  void *voidcostsabove, float **unwphase, 
 		  float *unwphaseabove, void **voidupperedgecosts, 
-		  short **upperedgeflows, paramT *params, short **bulkoffsets){
+		  int **upperedgeflows, paramT *params, int **bulkoffsets){
 
   long col, reloffset;
   double dphi, dpsi;
   costT **upperedgecosts, **costs, *costsabove;
   smoothcostT **upperedgesmoothcosts, **smoothcosts, *smoothcostsabove;
-  long nshortcycle;
+  long nintcycle;
 
 
   /* typecast generic pointers to costT pointers */
@@ -1957,19 +1956,19 @@ void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts,
   if(tilerow!=0){
 
     /* set up */
-    nshortcycle=params->nshortcycle;
+    nintcycle=params->nintcycle;
     reloffset=bulkoffsets[tilerow-1][tilecol]-bulkoffsets[tilerow][tilecol];
 
     /* loop over all arcs on the boundary */
     for(col=0;col<ncol;col++){
       dphi=(unwphaseabove[col]-unwphase[0][col])/TWOPI;
-      upperedgeflows[0][col]=(short )LRound(dphi)-reloffset;
+      upperedgeflows[0][col]=(int )LRound(dphi)-reloffset;
       dpsi=dphi-floor(dphi);
       if(dpsi>0.5){
 	dpsi-=1.0;
       }
       if(params->costmode==TOPO || params->costmode==DEFO){
-	upperedgecosts[0][col].offset=nshortcycle*dpsi;
+	upperedgecosts[0][col].offset=nintcycle*dpsi;
 	upperedgecosts[0][col].sigsq=ceil((costs[0][col].sigsq
 					   +costsabove[col].sigsq)/2.0);
 	if(costs[0][col].dzmax>costsabove[col].dzmax){
@@ -1983,7 +1982,7 @@ void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts,
 	  upperedgecosts[0][col].laycost=costsabove[col].laycost;
 	}
       }else if(params->costmode==SMOOTH){
-	upperedgesmoothcosts[0][col].offset=nshortcycle*dpsi;
+	upperedgesmoothcosts[0][col].offset=nintcycle*dpsi;
 	upperedgesmoothcosts[0][col].sigsq=
 	  ceil((smoothcosts[0][col].sigsq+smoothcostsabove[col].sigsq)/2.0);
       }else{
@@ -1995,15 +1994,15 @@ void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts,
   }else{
     if(params->costmode==TOPO || params->costmode==DEFO){
       for(col=0;col<ncol;col++){
-	upperedgecosts[0][col].offset=LARGESHORT/2;
-	upperedgecosts[0][col].sigsq=LARGESHORT;
-	upperedgecosts[0][col].dzmax=LARGESHORT;
+	upperedgecosts[0][col].offset=LARGEINT/2;
+	upperedgecosts[0][col].sigsq=LARGEINT;
+	upperedgecosts[0][col].dzmax=LARGEINT;
 	upperedgecosts[0][col].laycost=0;
       }
     }else if(params->costmode==SMOOTH){
       for(col=0;col<ncol;col++){
 	upperedgesmoothcosts[0][col].offset=0;
-	upperedgesmoothcosts[0][col].sigsq=LARGESHORT;
+	upperedgesmoothcosts[0][col].sigsq=LARGEINT;
       }
     }else{
       fprintf(sp0,"Illegal cost mode in SetUpperEdge().  This is a bug.\n");
@@ -2019,8 +2018,8 @@ void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts,
 void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol, 
 		  void **voidcosts, void *voidcostsbelow, 
 		  float **unwphase, float *unwphasebelow, 
-		  void **voidloweredgecosts, short **loweredgeflows, 
-		  paramT *params, short **bulkoffsets){
+		  void **voidloweredgecosts, int **loweredgeflows, 
+		  paramT *params, int **bulkoffsets){
 
   long *flowhistogram;
   long col, iflow, reloffset, nmax;
@@ -2028,7 +2027,7 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
   double dphi, dpsi;
   costT **loweredgecosts, **costs, *costsbelow;
   smoothcostT **loweredgesmoothcosts, **smoothcosts, *smoothcostsbelow;
-  long nshortcycle;
+  long nintcycle;
 
   /* typecast generic pointers to costT pointers */
   loweredgecosts=(costT **)voidloweredgecosts;
@@ -2042,9 +2041,9 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
   if(tilerow!=params->ntilerow-1){
   
     /* set up */
-    nshortcycle=params->nshortcycle;
-    flowlimhi=LARGESHORT;
-    flowlimlo=-LARGESHORT;
+    nintcycle=params->nintcycle;
+    flowlimhi=LARGEINT;
+    flowlimlo=-LARGEINT;
     flowhistogram=(long *)CAlloc(flowlimhi-flowlimlo+1,sizeof(long));
     minflow=flowlimhi;
     maxflow=flowlimlo;
@@ -2052,7 +2051,7 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
     /* loop over all arcs on the boundary */
     for(col=0;col<ncol;col++){
       dphi=(unwphase[nrow-1][col]-unwphasebelow[col])/TWOPI;
-      tempflow=(short )LRound(dphi);
+      tempflow=(int )LRound(dphi);
       loweredgeflows[0][col]=tempflow;
       if(tempflow<minflow){
 	if(tempflow<flowlimlo){
@@ -2074,7 +2073,7 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
 	dpsi-=1.0;
       }
       if(params->costmode==TOPO || params->costmode==DEFO){
-	loweredgecosts[0][col].offset=nshortcycle*dpsi;
+	loweredgecosts[0][col].offset=nintcycle*dpsi;
 	loweredgecosts[0][col].sigsq=ceil((costs[nrow-2][col].sigsq
 					   +costsbelow[col].sigsq)/2.0);
 	if(costs[nrow-2][col].dzmax>costsbelow[col].dzmax){
@@ -2088,7 +2087,7 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
 	  loweredgecosts[0][col].laycost=costsbelow[col].laycost;
 	}
       }else if(params->costmode==SMOOTH){
-	loweredgesmoothcosts[0][col].offset=nshortcycle*dpsi;
+	loweredgesmoothcosts[0][col].offset=nintcycle*dpsi;
 	loweredgesmoothcosts[0][col].sigsq=
 	  ceil((smoothcosts[nrow-2][col].sigsq
 		+smoothcostsbelow[col].sigsq)/2.0);
@@ -2120,15 +2119,15 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
   }else{
     if(params->costmode==TOPO || params->costmode==DEFO){
       for(col=0;col<ncol;col++){
-	loweredgecosts[0][col].offset=LARGESHORT/2;
-	loweredgecosts[0][col].sigsq=LARGESHORT;
-	loweredgecosts[0][col].dzmax=LARGESHORT;
+	loweredgecosts[0][col].offset=LARGEINT/2;
+	loweredgecosts[0][col].sigsq=LARGEINT;
+	loweredgecosts[0][col].dzmax=LARGEINT;
 	loweredgecosts[0][col].laycost=0;
       }
     }else if(params->costmode==SMOOTH){
       for(col=0;col<ncol;col++){
 	loweredgesmoothcosts[0][col].offset=0;
-	loweredgesmoothcosts[0][col].sigsq=LARGESHORT;
+	loweredgesmoothcosts[0][col].sigsq=LARGEINT;
       }
     }else{
       fprintf(sp0,"Illegal cost mode in SetLowerEdge().  This is a bug.\n");
@@ -2144,13 +2143,13 @@ void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
 void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol, 
 		 void **voidcosts, void **voidlastcosts, float **unwphase, 
 		 float **lastunwphase, void **voidleftedgecosts, 
-		 short **leftedgeflows, paramT *params, short **bulkoffsets){
+		 int **leftedgeflows, paramT *params, int **bulkoffsets){
 
   long row, reloffset;
   double dphi, dpsi;
   costT  **leftedgecosts, **costs, **lastcosts;
   smoothcostT  **leftedgesmoothcosts, **smoothcosts, **lastsmoothcosts;
-  long nshortcycle;
+  long nintcycle;
 
   /* typecast generic pointers to costT pointers */
   leftedgecosts=(costT **)voidleftedgecosts;
@@ -2164,20 +2163,20 @@ void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol,
   if(tilecol!=0){
 
     /* set up */
-    nshortcycle=params->nshortcycle;
+    nintcycle=params->nintcycle;
     reloffset=bulkoffsets[tilerow][tilecol]-bulkoffsets[tilerow][tilecol-1];
 
     /* loop over all arcs on the boundary */
     for(row=0;row<nrow;row++){
       dphi=(unwphase[row][0]
 	    -lastunwphase[row][prevncol-1])/TWOPI;
-      leftedgeflows[row][0]=(short )LRound(dphi)-reloffset;
+      leftedgeflows[row][0]=(int )LRound(dphi)-reloffset;
       dpsi=dphi-floor(dphi);
       if(dpsi>0.5){
 	dpsi-=1.0;
       }
       if(params->costmode==TOPO || params->costmode==DEFO){
-	leftedgecosts[row][0].offset=(TILEDPSICOLFACTOR*nshortcycle*dpsi);
+	leftedgecosts[row][0].offset=(TILEDPSICOLFACTOR*nintcycle*dpsi);
 	leftedgecosts[row][0].sigsq=
 	  ceil((costs[row+nrow-1][0].sigsq
 		+lastcosts[row+nrow-1][prevncol-2].sigsq)/2.0);
@@ -2195,7 +2194,7 @@ void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol,
 	}
       }else if(params->costmode==SMOOTH){
 	leftedgesmoothcosts[row][0].offset
-	  =(TILEDPSICOLFACTOR*nshortcycle*dpsi);
+	  =(TILEDPSICOLFACTOR*nintcycle*dpsi);
 	leftedgesmoothcosts[row][0].sigsq=
 	  ceil((smoothcosts[row+nrow-1][0].sigsq
 		+lastsmoothcosts[row+nrow-1][prevncol-2].sigsq)/2.0);
@@ -2207,15 +2206,15 @@ void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol,
   }else{
     if(params->costmode==TOPO || params->costmode==DEFO){
       for(row=0;row<nrow;row++){
-	leftedgecosts[row][0].offset=LARGESHORT/2;
-	leftedgecosts[row][0].sigsq=LARGESHORT;
-	leftedgecosts[row][0].dzmax=LARGESHORT;
+	leftedgecosts[row][0].offset=LARGEINT/2;
+	leftedgecosts[row][0].sigsq=LARGEINT;
+	leftedgecosts[row][0].dzmax=LARGEINT;
 	leftedgecosts[row][0].laycost=0;
       }
     }else if(params->costmode==SMOOTH){
       for(row=0;row<nrow;row++){
 	leftedgesmoothcosts[row][0].offset=0;
-	leftedgesmoothcosts[row][0].sigsq=LARGESHORT;
+	leftedgesmoothcosts[row][0].sigsq=LARGEINT;
       }
     }else{
       fprintf(sp0,"Illegal cost mode in SetLeftEdge().  This is a bug.\n");
@@ -2231,8 +2230,8 @@ void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol,
 void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol, 
 		  void **voidcosts, void **voidnextcosts, 
 		  float **unwphase, float **nextunwphase, 
-		  void **voidrightedgecosts, short **rightedgeflows, 
-		  paramT *params, short **bulkoffsets){
+		  void **voidrightedgecosts, int **rightedgeflows, 
+		  paramT *params, int **bulkoffsets){
 
   long *flowhistogram;
   long row, iflow, reloffset, nmax;
@@ -2240,7 +2239,7 @@ void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
   double dphi, dpsi;
   costT  **rightedgecosts, **costs, **nextcosts;
   smoothcostT  **rightedgesmoothcosts, **smoothcosts, **nextsmoothcosts;
-  long nshortcycle;
+  long nintcycle;
 
   /* typecast generic pointers to costT pointers */
   rightedgecosts=(costT **)voidrightedgecosts;
@@ -2254,9 +2253,9 @@ void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
   if(tilecol!=params->ntilecol-1){
 
     /* set up */
-    nshortcycle=params->nshortcycle;
-    flowlimhi=LARGESHORT;
-    flowlimlo=-LARGESHORT;
+    nintcycle=params->nintcycle;
+    flowlimhi=LARGEINT;
+    flowlimlo=-LARGEINT;
     flowhistogram=(long *)CAlloc(flowlimhi-flowlimlo+1,sizeof(long));
     minflow=flowlimhi;
     maxflow=flowlimlo;
@@ -2265,7 +2264,7 @@ void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
     for(row=0;row<nrow;row++){
       dphi=(nextunwphase[row][0]
 	    -unwphase[row][ncol-1])/TWOPI;
-      tempflow=(short )LRound(dphi);
+      tempflow=(int )LRound(dphi);
       rightedgeflows[row][0]=tempflow;
       if(tempflow<minflow){
 	if(tempflow<flowlimlo){
@@ -2287,7 +2286,7 @@ void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
 	dpsi-=1.0;
       }
       if(params->costmode==TOPO || params->costmode==DEFO){
-	rightedgecosts[row][0].offset=(TILEDPSICOLFACTOR*nshortcycle*dpsi);
+	rightedgecosts[row][0].offset=(TILEDPSICOLFACTOR*nintcycle*dpsi);
 	rightedgecosts[row][0].sigsq
 	  =ceil((costs[row+nrow-1][ncol-2].sigsq
 		 +nextcosts[row+nrow-1][0].sigsq)/2.0);
@@ -2303,7 +2302,7 @@ void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
 	}
       }else if(params->costmode==SMOOTH){
 	rightedgesmoothcosts[row][0].offset
-	  =(TILEDPSICOLFACTOR*nshortcycle*dpsi);
+	  =(TILEDPSICOLFACTOR*nintcycle*dpsi);
 	rightedgesmoothcosts[row][0].sigsq
 	  =ceil((smoothcosts[row+nrow-1][ncol-2].sigsq
 		 +nextsmoothcosts[row+nrow-1][0].sigsq)/2.0);
@@ -2340,15 +2339,15 @@ void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
   }else{
     if(params->costmode==TOPO || params->costmode==DEFO){
       for(row=0;row<nrow;row++){
-	rightedgecosts[row][0].offset=LARGESHORT/2;
-	rightedgecosts[row][0].sigsq=LARGESHORT;
-	rightedgecosts[row][0].dzmax=LARGESHORT;
+	rightedgecosts[row][0].offset=LARGEINT/2;
+	rightedgecosts[row][0].sigsq=LARGEINT;
+	rightedgecosts[row][0].dzmax=LARGEINT;
 	rightedgecosts[row][0].laycost=0;
       }
     }else if(params->costmode==SMOOTH){
       for(row=0;row<nrow;row++){
 	rightedgesmoothcosts[row][0].offset=0;
-	rightedgesmoothcosts[row][0].sigsq=LARGESHORT;
+	rightedgesmoothcosts[row][0].sigsq=LARGEINT;
       }
     }else{
       fprintf(sp0,"Illegal cost mode in SetRightEdge().  This is a bug.\n");
@@ -2369,23 +2368,23 @@ void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
 		       long prevnrow, long prevncol, paramT *params, 
 		       void **tilecosts, void **rightedgecosts, 
 		       void **loweredgecosts, void **leftedgecosts,
-		       void **upperedgecosts, short **tileflows, 
-		       short **rightedgeflows, short **loweredgeflows, 
-		       short **leftedgeflows, short **upperedgeflows,
+		       void **upperedgecosts, int **tileflows, 
+		       int **rightedgeflows, int **loweredgeflows, 
+		       int **leftedgeflows, int **upperedgeflows,
 		       nodeT ***updatednontilenodesptr, 
 		       long *nupdatednontilenodesptr, 
 		       long *updatednontilenodesizeptr,
-		       short **inontilenodeoutarcptr, long *totarclenptr){
+		       int **inontilenodeoutarcptr, long *totarclenptr){
 
   long i, row, col, nnewnodes, arclen, ntilerow, ntilecol, arcnum;
   long tilenum, nflow, primaryarcrow, primaryarccol, poscost, negcost, nomcost;
-  long nnrow, nncol, calccostnrow, nnewarcs, arroffset, nshortcycle;
+  long nnrow, nncol, calccostnrow, nnewarcs, arroffset, nintcycle;
   long mincost, mincostflow;
   long *scndrycostarr;
   long double templongdouble;
-  double sigsq=0, sumsigsqinv, tempdouble, tileedgearcweight;
-  short **flows;
-  void **costs;
+  double sigsq, sumsigsqinv, tempdouble, tileedgearcweight;
+  int **flows = NULL;
+  void **costs = NULL;
   nodeT *tempnode, *primarytail, *scndrytail, *scndryhead;
   nodeT *primarydummy, *scndrydummy;
   nodesuppT *supptail, *supphead, *suppdummy;
@@ -2408,7 +2407,7 @@ void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
   tilenum=tilerow*ntilecol+tilecol;
   scndrycostarr=(long *)MAlloc((2*flowmax+2)*sizeof(long));
   tileedgearcweight=params->tileedgeweight;
-  nshortcycle=params->nshortcycle;
+  nintcycle=params->nintcycle;
   zerocost=FALSE;
   arroffset=0;
 
@@ -2667,7 +2666,7 @@ void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
     }
 
     /* store sum of primary cost variances at end of secondary cost array */
-    tempdouble=sumsigsqinv*nshortcycle*nshortcycle;
+    tempdouble=sumsigsqinv*nintcycle*nintcycle;
     if(tempdouble<LARGELONG){
       scndrycostarr[2*flowmax+1]=LRound(tempdouble);
     }else{
@@ -2845,9 +2844,9 @@ void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
       (*updatednontilenodesptr)=(nodeT **)ReAlloc((*updatednontilenodesptr),
 						  (*updatednontilenodesizeptr)
 						  *sizeof(nodeT *));
-      (*inontilenodeoutarcptr)=(short *)ReAlloc((*inontilenodeoutarcptr),
+      (*inontilenodeoutarcptr)=(int *)ReAlloc((*inontilenodeoutarcptr),
 						(*updatednontilenodesizeptr)
-						*sizeof(short));
+						*sizeof(int));
     }    
     (*updatednontilenodesptr)[*nupdatednontilenodesptr-1]=scndrytail;
     (*inontilenodeoutarcptr)[*nupdatednontilenodesptr-1]=supptail->noutarcs-1;
@@ -2858,9 +2857,9 @@ void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
       (*updatednontilenodesptr)=(nodeT **)ReAlloc((*updatednontilenodesptr),
 						  (*updatednontilenodesizeptr)
 						  *sizeof(nodeT *));
-      (*inontilenodeoutarcptr)=(short *)ReAlloc((*inontilenodeoutarcptr),
+      (*inontilenodeoutarcptr)=(int *)ReAlloc((*inontilenodeoutarcptr),
 						(*updatednontilenodesizeptr)
-						*sizeof(short));
+						*sizeof(int));
     }    
     (*updatednontilenodesptr)[*nupdatednontilenodesptr-1]=scndryhead;
     (*inontilenodeoutarcptr)[*nupdatednontilenodesptr-1]=supphead->noutarcs-1;
@@ -2915,19 +2914,19 @@ nodeT *FindScndryNode(nodeT **scndrynodes, nodesuppT **nodesupp,
  */
 void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes, 
 			     nodesuppT **nodesupp, scndryarcT **scndryarcs, 
-			     short *nscndryarcs, short **scndryflows, 
-			     short **bulkoffsets, outfileT *outfiles, 
+			     int *nscndryarcs, int **scndryflows, 
+			     int **bulkoffsets, outfileT *outfiles, 
 			     paramT *params){
   
   FILE *outfp;
   float **unwphase, **tileunwphase, **mag, **tilemag;
   float *outline;
-  long row, col, colstart, nrow=0, ncol, nnrow, nncol, maxcol;
+  long row, col, colstart, nrow, ncol, nnrow, nncol, maxcol;
   long readtilelinelen, readtilenlines, nextcoloffset, nextrowoffset;
   long tilerow, tilecol, ntilerow, ntilecol, rowovrlp, colovrlp;
   long ni, nj, tilenum;
   double tileoffset;
-  short **regions, **tileflows;
+  int **regions, **tileflows;
   char realoutfile[MAXSTRLEN], readfile[MAXSTRLEN], tempstring[MAXTMPSTRLEN];
   char path[MAXSTRLEN], basename[MAXSTRLEN];
   signed char writeerror;
@@ -2947,8 +2946,8 @@ void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes,
   writeerror=FALSE;
 
   /* get memory */
-  regions=(short **)Get2DMem(ni,nj,sizeof(short *),sizeof(short));
-  tileflows=(short **)Get2DRowColMem(ni+2,nj+2,sizeof(short *),sizeof(short));
+  regions=(int **)Get2DMem(ni,nj,sizeof(int *),sizeof(int));
+  tileflows=(int **)Get2DRowColMem(ni+2,nj+2,sizeof(int *),sizeof(int));
   tileunwphase=(float **)Get2DMem(ni,nj,sizeof(float *),sizeof(float));
   tilemag=(float **)Get2DMem(ni,nj,sizeof(float *),sizeof(float));
   unwphase=(float **)Get2DMem(ni,linelen,sizeof(float *),sizeof(float));
@@ -3010,12 +3009,12 @@ void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes,
 	      readtilelinelen,REGIONSUFFIX);
       StrNCopy(readfile,tempstring,MAXSTRLEN);
       Read2DArray((void ***)&regions,readfile,readtilelinelen,readtilenlines,
-		  readtileparams,sizeof(short *),sizeof(short));
+		  readtileparams,sizeof(int *),sizeof(int));
 
       /* remove temporary files unless told so save them */
       if(params->rmtmptile){
-	unlink(readtileoutfiles->outfile);
-	unlink(readfile);
+	remove(readtileoutfiles->outfile);
+	remove(readfile);
       }
 
       /* zero out primary flow array */
@@ -3131,8 +3130,8 @@ void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes,
 /* function: ParseSecondaryFlows()
  * -------------------------------
  */
-void ParseSecondaryFlows(long tilenum, short *nscndryarcs, short **tileflows, 
-			 short **regions, short **scndryflows, 
+void ParseSecondaryFlows(long tilenum, int *nscndryarcs, int **tileflows, 
+			 int **regions, int **scndryflows, 
 			 nodesuppT **nodesupp, scndryarcT **scndryarcs, 
 			 long nrow, long ncol, long ntilerow, long ntilecol,
 			 paramT *params){

@@ -1,3 +1,4 @@
+#pragma once
 /*************************************************************************
 
   snaphu header file
@@ -14,7 +15,7 @@
 /**********************/
 
 #define PROGRAMNAME          "snaphu"
-#define VERSION              "1.4.2"
+#define VERSION              "1.4.2b"
 #ifdef PI
 #undef PI
 #endif
@@ -26,7 +27,7 @@
 #define MAXLINELEN           2048
 #define TRUE                 1
 #define FALSE                0
-#define LARGESHORT           32000
+#define LARGEINT             32000
 #define LARGELONG            2000000000
 #define LARGELONGLONG        9000000000000000000
 #define LARGEFLOAT           1.0e35
@@ -39,7 +40,7 @@
 #define NOTINBUCKET          3
 #define POSINCR              0
 #define NEGINCR              1
-#define NOCOSTSHELF          -LARGESHORT
+#define NOCOSTSHELF          -LARGEINT
 #define MINSCALARCOST        1
 #define INITARRSIZE          500
 #define NEWNODEBAGSTEP       500
@@ -70,12 +71,16 @@
 #define DEF_COSTOUTFILE      ""
 #define DEF_LOGFILE          ""
 #define MAXITERATION         5000
-#define NEGSHORTRANGE        SHRT_MIN
-#define POSSHORTRANGE        SHRT_MAX
+#define NEGINTRANGE          SHRT_MIN
+#define POSINTRANGE          SHRT_MAX
 #define MAXRES               SCHAR_MAX
 #define MINRES               SCHAR_MIN
 #define PROBCOSTP            (-16)
-#define NULLFILE             "/dev/null"
+#ifdef __GNUC__
+#  define NULLFILE           "/dev/null"
+#else
+#  define NULLFILE           "NUL"
+#endif
 #define DEF_ERRORSTREAM      stderr
 #define DEF_OUTPUTSTREAM     stdout
 #define DEF_VERBOSESTREAM    NULL
@@ -126,7 +131,6 @@
 #define TOPO                 1
 #define DEFO                 2
 #define SMOOTH               3
-
 
 /* SAR and geometry parameter defaults */
 
@@ -185,7 +189,7 @@
 #define DEF_DZLAYFACTOR      1.0
 #define DEF_LAYCONST         0.9
 #define DEF_LAYFALLOFFCONST  2.0
-#define DEF_SIGSQSHORTMIN    1
+#define DEF_SIGSQINTMIN      1
 #define DEF_SIGSQLAYFACTOR   0.1
 
 
@@ -216,7 +220,7 @@
 #define DEF_SRCROW           -1
 #define DEF_SRCCOL           -1
 #define DEF_P                PROBCOSTP
-#define DEF_NSHORTCYCLE      200
+#define DEF_NINTCYCLE        200
 #define DEF_MAXNEWNODECONST  0.0008
 #define DEF_MAXCYCLEFRACTION 0.00001
 #define DEF_SOURCEMODE       0
@@ -240,6 +244,14 @@
 #define INCRCOSTFILENEG      "snaphu.incrcostneg"
 #define DEF_CS2SCALEFACTOR   8
 
+#include <stdio.h>
+#ifndef __GNUC__
+#  include <type_traits>
+#  pragma warning(disable : 4244)
+#  pragma warning(disable : 4305)
+#  define getcwd _getcwd
+#  define mkdir(a, b) _mkdir(a)
+#endif
 
 /* default tile parameters */
 
@@ -392,9 +404,13 @@
 /* type definitions */
 /********************/
 
+#ifndef __GNUC__
+typedef int pid_t;
+#endif
+
 /* node data structure */
 typedef struct nodeST{
-  short row,col;                /* row, col of this node */
+  int row,col;                /* row, col of this node */
   unsigned long level;          /* tree level */
   struct nodeST *next;          /* ptr to next node in thread or bucket */
   struct nodeST *prev;          /* ptr to previous node in thread or bucket */
@@ -406,24 +422,24 @@ typedef struct nodeST{
 
 /* arc cost data structure */
 typedef struct costST{
-  short offset;                 /* offset of wrapped phase gradient from 0 */
-  short sigsq;                  /* variance due to decorrelation */
-  short dzmax;                  /* largest discontinuity on shelf */
-  short laycost;                /* cost of layover discontinuity shelf */
+  int offset;                 /* offset of wrapped phase gradient from 0 */
+  int sigsq;                  /* variance due to decorrelation */
+  int dzmax;                  /* largest discontinuity on shelf */
+  int laycost;                /* cost of layover discontinuity shelf */
 }costT;
 
 
 /* arc cost data structure for smooth costs */
 typedef struct smoothcostST{
-  short offset;                 /* offset of wrapped phase gradient from 0 */
-  short sigsq;                  /* variance due to decorrelation */
+  int offset;                 /* offset of wrapped phase gradient from 0 */
+  int sigsq;                  /* variance due to decorrelation */
 }smoothcostT;
 
 
 /* incremental cost data structure */
 typedef struct incrcostST{
-  short poscost;                /* cost for positive flow increment */
-  short negcost;                /* cost for negative flow increment */
+  int poscost;                /* cost for positive flow increment */
+  int negcost;                /* cost for negative flow increment */
 }incrcostT;
 
 
@@ -431,7 +447,7 @@ typedef struct incrcostST{
 typedef struct candidateST{
   nodeT *from, *to;             /* endpoints of candidate arc */
   long violation;               /* magnitude of arc violation */
-  short arcrow,arccol;          /* indexes into arc arrays */
+  int arcrow,arccol;          /* indexes into arc arrays */
   signed char arcdir;           /* direction of arc (1=fwd, -1=rev) */
 }candidateT;
 
@@ -450,8 +466,8 @@ typedef struct bucketST{
 
 /* secondary arc data structure */
 typedef struct scndryarcST{
-  short arcrow;                 /* row of arc in secondary network array */
-  short arccol;                 /* col of arc in secondary network array */
+  int arcrow;                 /* row of arc in secondary network array */
+  int arccol;                 /* col of arc in secondary network array */
   nodeT *from;                  /* secondary node at tail of arc */
   nodeT *to;                    /* secondary node at head of arc */
   signed char fromdir;          /* direction from which arc enters head */
@@ -460,11 +476,11 @@ typedef struct scndryarcST{
 
 /* supplementary data structure for secondary nodes */
 typedef struct nodesuppST{
-  short row;                    /* row of node in primary network problem */
-  short col;                    /* col of node in primary network problem */
+  int row;                    /* row of node in primary network problem */
+  int col;                    /* col of node in primary network problem */
   nodeT **neighbornodes;        /* pointers to neighboring secondary nodes */
   scndryarcT **outarcs;         /* pointers to secondary arcs to neighbors */
-  short noutarcs;               /* number of arcs from this node */
+  int noutarcs;               /* number of arcs from this node */
 }nodesuppT;
 
 
@@ -518,7 +534,7 @@ typedef struct paramST{
   double dzlayfactor;     /* layover regime dz scale factor */
   double layconst;        /* normalized constant pdf of layover edge */
   double layfalloffconst; /* factor of sigsq for layover cost increase */
-  long sigsqshortmin;     /* min short value for costT variance */
+  long sigsqintmin;     /* min int value for costT variance */
   double sigsqlayfactor;  /* fration of ambiguityheight^2 for layover sigma */
 
   /* deformation mode parameters */
@@ -555,7 +571,7 @@ typedef struct paramST{
   double dnomincangle;    /* step size for range-varying param lookup table */
   long srcrow,srccol;     /* source node location */
   double p;               /* power for Lp-norm solution (less than 0 is MAP) */
-  long nshortcycle;       /* number of points for one cycle in short int dz */
+  long nintcycle;       /* number of points for one cycle in int int dz */
   double maxnewnodeconst; /* number of nodes added to tree on each iteration */
   long maxnflowcycles;    /* max number of cycles to consider nflow done */
   double maxcyclefraction;/* ratio of max cycles to pixels */
@@ -650,186 +666,186 @@ typedef double totalcostT;            /* typedef long long totalcostT; */
 
 /* functions in snaphu.c */
 
-void Unwrap(infileT *infiles, outfileT *outfiles, paramT *params, 
+void Unwrap(infileT *infiles, outfileT *outfiles, paramT *params,
 	    long linelen, long nlines);
-void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params, 
+void UnwrapTile(infileT *infiles, outfileT *outfiles, paramT *params,
 		tileparamT *tileparams, long nlines, long linelen);
 
 
 /* functions in snaphu_tile.c */
 
-void SetupTile(long nlines, long linelen, paramT *params, 
-	       tileparamT *tileparams, outfileT *outfiles, 
+void SetupTile(long nlines, long linelen, paramT *params,
+	       tileparamT *tileparams, outfileT *outfiles,
 	       outfileT *tileoutfiles, long tilerow, long tilecol);
-void GrowRegions(void **costs, short **flows, long nrow, long ncol, 
+void GrowRegions(void **costs, int **flows, long nrow, long ncol,
 		 incrcostT **incrcosts, outfileT *outfiles, paramT *params);
-void GrowConnCompsMask(void **costs, short **flows, long nrow, long ncol, 
-		       incrcostT **incrcosts, outfileT *outfiles, 
+void GrowConnCompsMask(void **costs, int **flows, long nrow, long ncol,
+		       incrcostT **incrcosts, outfileT *outfiles,
 		       paramT *params);
 long ThickenCosts(incrcostT **incrcosts, long nrow, long ncol);
-nodeT *RegionsNeighborNode(nodeT *node1, long *arcnumptr, nodeT **nodes, 
-			   long *arcrowptr, long *arccolptr, 
+nodeT *RegionsNeighborNode(nodeT *node1, long *arcnumptr, nodeT **nodes,
+			   long *arcrowptr, long *arccolptr,
 			   long nrow, long ncol);
 void ClearBuckets(bucketT *bkts);
-void MergeRegions(nodeT **nodes, nodeT *source, long *regionsizes, 
+void MergeRegions(nodeT **nodes, nodeT *source, long *regionsizes,
 		  long closestregion, long nrow, long ncol);
-void RenumberRegion(nodeT **nodes, nodeT *source, long newnum, 
+void RenumberRegion(nodeT **nodes, nodeT *source, long newnum,
 		    long nrow, long ncol);
-void AssembleTiles(outfileT *outfiles, paramT *params, 
+void AssembleTiles(outfileT *outfiles, paramT *params,
 		   long nlines, long linelen);
 void ReadNextRegion(long tilerow, long tilecol, long nlines, long linelen,
-		    outfileT *outfiles, paramT *params, 
-		    short ***nextregionsptr, float ***nextunwphaseptr,
-		    void ***nextcostsptr, 
+		    outfileT *outfiles, paramT *params,
+		    int ***nextregionsptr, float ***nextunwphaseptr,
+		    void ***nextcostsptr,
 		    long *nextnrowptr, long *nextncolptr);
-void SetTileReadParams(tileparamT *tileparams, long nexttilenlines, 
-		       long nexttilelinelen, long tilerow, long tilecol, 
+void SetTileReadParams(tileparamT *tileparams, long nexttilenlines,
+		       long nexttilelinelen, long tilerow, long tilecol,
 		       long nlines, long linelen, paramT *params);
-void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines, 
-			    long linelen, paramT *params, outfileT *outfiles, 
-			    short *regionsabove, short *regionsbelow,
+void ReadEdgesAboveAndBelow(long tilerow, long tilecol, long nlines,
+			    long linelen, paramT *params, outfileT *outfiles,
+			    int *regionsabove, int *regionsbelow,
 			    float *unwphaseabove, float *unwphasebelow,
 			    void *costsabove, void *costsbelow);
-void TraceRegions(short **regions, short **nextregions, short **lastregions, 
-		  short *regionsabove, short *regionsbelow, float **unwphase, 
-		  float **nextunwphase, float **lastunwphase, 
-		  float *unwphaseabove, float *unwphasebelow, void **costs, 
-		  void **nextcosts, void **lastcosts, void *costsabove, 
+void TraceRegions(int **regions, int **nextregions, int **lastregions,
+		  int *regionsabove, int *regionsbelow, float **unwphase,
+		  float **nextunwphase, float **lastunwphase,
+		  float *unwphaseabove, float *unwphasebelow, void **costs,
+		  void **nextcosts, void **lastcosts, void *costsabove,
 		  void *costsbelow, long prevnrow, long prevncol, long tilerow,
 		  long tilecol, long nrow, long ncol, nodeT **scndrynodes,
-		  nodesuppT **nodesupp, scndryarcT **scndryarcs, 
-		  long ***scndrycosts, short *nscndrynodes, 
-		  short *nscndryarcs, long *totarclens, short **bulkoffsets, 
+		  nodesuppT **nodesupp, scndryarcT **scndryarcs,
+		  long ***scndrycosts, int *nscndrynodes,
+		  int *nscndryarcs, long *totarclens, int **bulkoffsets,
 		  paramT *params);
-long FindNumPathsOut(nodeT *from, paramT *params, long tilerow, long tilecol, 
-		     long nnrow, long nncol, short **regions, 
-		     short **nextregions, short **lastregions,
-		     short *regionsabove, short *regionsbelow, long prevncol);
-void RegionTraceCheckNeighbors(nodeT *from, nodeT **nextnodeptr, 
-			       nodeT **primarynodes, short **regions, 
-			       short **nextregions, short **lastregions, 
-			       short *regionsabove, short *regionsbelow,  
-			       long tilerow, long tilecol, long nnrow, 
-			       long nncol, nodeT **scndrynodes, 
-			       nodesuppT **nodesupp, scndryarcT **scndryarcs, 
-			       long *nnewnodesptr, long *nnewarcsptr, 
-			       long flowmax, long nrow, long ncol, 
-			       long prevnrow, long prevncol, paramT *params, 
-			       void **costs, void **rightedgecosts, 
-			       void **loweredgecosts, void **leftedgecosts, 
-			       void **upperedgecosts, short **flows, 
-			       short **rightedgeflows, short **loweredgeflows,
-			       short **leftedgeflows, short **upperedgeflows,
-			       long ***scndrycosts, 
-			       nodeT ***updatednontilenodesptr, 
-			       long *nupdatednontilenodesptr, 
+long FindNumPathsOut(nodeT *from, paramT *params, long tilerow, long tilecol,
+		     long nnrow, long nncol, int **regions,
+		     int **nextregions, int **lastregions,
+		     int *regionsabove, int *regionsbelow, long prevncol);
+void RegionTraceCheckNeighbors(nodeT *from, nodeT **nextnodeptr,
+			       nodeT **primarynodes, int **regions,
+			       int **nextregions, int **lastregions,
+			       int *regionsabove, int *regionsbelow,
+			       long tilerow, long tilecol, long nnrow,
+			       long nncol, nodeT **scndrynodes,
+			       nodesuppT **nodesupp, scndryarcT **scndryarcs,
+			       long *nnewnodesptr, long *nnewarcsptr,
+			       long flowmax, long nrow, long ncol,
+			       long prevnrow, long prevncol, paramT *params,
+			       void **costs, void **rightedgecosts,
+			       void **loweredgecosts, void **leftedgecosts,
+			       void **upperedgecosts, int **flows,
+			       int **rightedgeflows, int **loweredgeflows,
+			       int **leftedgeflows, int **upperedgeflows,
+			       long ***scndrycosts,
+			       nodeT ***updatednontilenodesptr,
+			       long *nupdatednontilenodesptr,
 			       long *updatednontilenodesizeptr,
-			       short **inontilenodeoutarcptr, 
+			       int **inontilenodeoutarcptr,
 			       long *totarclenptr);
-void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts, 
-		  void *voidcostsabove, float **unwphase, 
-		  float *unwphaseabove, void **voidupperedgecosts, 
-		  short **upperedgeflows, paramT *params, short **bulkoffsets);
-void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol, 
-		  void **voidcosts, void *voidcostsbelow, 
-		  float **unwphase, float *unwphasebelow, 
-		  void **voidloweredgecosts, short **loweredgeflows, 
-		  paramT *params, short **bulkoffsets);
-void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol, 
-		 void **voidcosts, void **voidlastcosts, float **unwphase, 
-		 float **lastunwphase, void **voidleftedgecosts, 
-		 short **leftedgeflows, paramT *params, short **bulkoffsets);
-void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol, 
-		  void **voidcosts, void **voidnextcosts, 
-		  float **unwphase, float **nextunwphase, 
-		  void **voidrightedgecosts, short **rightedgeflows, 
-		  paramT *params, short **bulkoffsets);
-void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes, 
-		       nodesuppT **nodesupp, scndryarcT **scndryarcs, 
-		       long ***scndrycosts, long *nnewnodesptr, 
-		       long *nnewarcsptr, long tilerow, long tilecol, 
-		       long flowmax, long nrow, long ncol, 
-		       long prevnrow, long prevncol, paramT *params, 
-		       void **tilecosts, void **rightedgecosts, 
+void SetUpperEdge(long ncol, long tilerow, long tilecol, void **voidcosts,
+		  void *voidcostsabove, float **unwphase,
+		  float *unwphaseabove, void **voidupperedgecosts,
+		  int **upperedgeflows, paramT *params, int **bulkoffsets);
+void SetLowerEdge(long nrow, long ncol, long tilerow, long tilecol,
+		  void **voidcosts, void *voidcostsbelow,
+		  float **unwphase, float *unwphasebelow,
+		  void **voidloweredgecosts, int **loweredgeflows,
+		  paramT *params, int **bulkoffsets);
+void SetLeftEdge(long nrow, long prevncol, long tilerow, long tilecol,
+		 void **voidcosts, void **voidlastcosts, float **unwphase,
+		 float **lastunwphase, void **voidleftedgecosts,
+		 int **leftedgeflows, paramT *params, int **bulkoffsets);
+void SetRightEdge(long nrow, long ncol, long tilerow, long tilecol,
+		  void **voidcosts, void **voidnextcosts,
+		  float **unwphase, float **nextunwphase,
+		  void **voidrightedgecosts, int **rightedgeflows,
+		  paramT *params, int **bulkoffsets);
+void TraceSecondaryArc(nodeT *primaryhead, nodeT **scndrynodes,
+		       nodesuppT **nodesupp, scndryarcT **scndryarcs,
+		       long ***scndrycosts, long *nnewnodesptr,
+		       long *nnewarcsptr, long tilerow, long tilecol,
+		       long flowmax, long nrow, long ncol,
+		       long prevnrow, long prevncol, paramT *params,
+		       void **tilecosts, void **rightedgecosts,
 		       void **loweredgecosts, void **leftedgecosts,
-		       void **upperedgecosts, short **tileflows, 
-		       short **rightedgeflows, short **loweredgeflows, 
-		       short **leftedgeflows, short **upperedgeflows,
-		       nodeT ***updatednontilenodesptr, 
-		       long *nupdatednontilenodesptr, 
+		       void **upperedgecosts, int **tileflows,
+		       int **rightedgeflows, int **loweredgeflows,
+		       int **leftedgeflows, int **upperedgeflows,
+		       nodeT ***updatednontilenodesptr,
+		       long *nupdatednontilenodesptr,
 		       long *updatednontilenodesizeptr,
-		       short **inontilenodeoutarcptr, long *totarclenptr);
-nodeT *FindScndryNode(nodeT **scndrynodes, nodesuppT **nodesupp, 
+		       int **inontilenodeoutarcptr, long *totarclenptr);
+nodeT *FindScndryNode(nodeT **scndrynodes, nodesuppT **nodesupp,
 		      long tilenum, long primaryrow, long primarycol);
-void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes, 
-			     nodesuppT **nodesupp, scndryarcT **scndryarcs, 
-			     short *nscndryarcs, short **scndryflows, 
-			     short **bulkoffsets, outfileT *outfiles, 
+void IntegrateSecondaryFlows(long linelen, long nlines, nodeT **scndrynodes,
+			     nodesuppT **nodesupp, scndryarcT **scndryarcs,
+			     int *nscndryarcs, int **scndryflows,
+			     int **bulkoffsets, outfileT *outfiles,
 			     paramT *params);
-void ParseSecondaryFlows(long tilenum, short *nscndryarcs, short **tileflows, 
-			 short **regions, short **scndryflows, 
-			 nodesuppT **nodesupp, scndryarcT **scndryarcs, 
+void ParseSecondaryFlows(long tilenum, int *nscndryarcs, int **tileflows,
+			 int **regions, int **scndryflows,
+			 nodesuppT **nodesupp, scndryarcT **scndryarcs,
 			 long nrow, long ncol, long ntilerow, long ntilecol,
 			 paramT *params);
 
 
 /* functions in snaphu_solver.c */
 
-long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground, 
-	       nodeT *source, candidateT **candidatelistptr, 
+long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
+	       nodeT *source, candidateT **candidatelistptr,
 	       candidateT **candidatebagptr, long *candidatelistsizeptr,
-	       long *candidatebagsizeptr, bucketT *bkts, short **flows, 
-	       void **costs, incrcostT **incrcosts, nodeT ***apexes, 
-	       signed char **iscandidate, long ngroundarcs, long nflow, 
-	       float **mag, float **wrappedphase, char *outfile, 
-	       long nnoderow, short *nnodesperrow, long narcrow, 
-	       short *narcsperrow, long nrow, long ncol,
+	       long *candidatebagsizeptr, bucketT *bkts, int **flows,
+	       void **costs, incrcostT **incrcosts, nodeT ***apexes,
+	       signed char **iscandidate, long ngroundarcs, long nflow,
+	       float **mag, float **wrappedphase, const char *outfile,
+	       long nnoderow, int *nnodesperrow, long narcrow,
+	       int *narcsperrow, long nrow, long ncol,
 	       outfileT *outfiles, paramT *params);
-void AddNewNode(nodeT *from, nodeT *to, long arcdir, bucketT *bkts, 
-		long nflow, incrcostT **incrcosts, long arcrow, long arccol, 
+void AddNewNode(nodeT *from, nodeT *to, long arcdir, bucketT *bkts,
+		long nflow, incrcostT **incrcosts, long arcrow, long arccol,
 		paramT *params);
-void CheckArcReducedCost(nodeT *from, nodeT *to, nodeT *apex, 
-			 long arcrow, long arccol, long arcdir, 
-			 long nflow, nodeT **nodes, nodeT *ground, 
-			 candidateT **candidatebagptr, 
-			 long *candidatebagnextptr, 
-			 long *candidatebagsizeptr, incrcostT **incrcosts, 
+void CheckArcReducedCost(nodeT *from, nodeT *to, nodeT *apex,
+			 long arcrow, long arccol, long arcdir,
+			 long nflow, nodeT **nodes, nodeT *ground,
+			 candidateT **candidatebagptr,
+			 long *candidatebagnextptr,
+			 long *candidatebagsizeptr, incrcostT **incrcosts,
 			 signed char **iscandidate, paramT *params);
-long InitTree(nodeT *source, nodeT **nodes, nodesuppT **nodesupp, 
-	      nodeT *ground, long ngroundarcs, bucketT *bkts, long nflow, 
-	      incrcostT **incrcosts, nodeT ***apexes, 
-	      signed char **iscandidate, long nnoderow, short *nnodesperrow, 
-	      long narcrow, short *narcsperrow, long nrow, long ncol, 
+long InitTree(nodeT *source, nodeT **nodes, nodesuppT **nodesupp,
+	      nodeT *ground, long ngroundarcs, bucketT *bkts, long nflow,
+	      incrcostT **incrcosts, nodeT ***apexes,
+	      signed char **iscandidate, long nnoderow, int *nnodesperrow,
+	      long narcrow, int *narcsperrow, long nrow, long ncol,
 	      paramT *params);
 nodeT *FindApex(nodeT *from, nodeT *to);
 int CandidateCompare(const void *c1, const void *c2);
 nodeT *NeighborNodeGrid(nodeT *node1, long arcnum, long *upperarcnumptr,
-			nodeT **nodes, nodeT *ground, long *arcrowptr, 
-			long *arccolptr, long *arcdirptr, long nrow, 
+			nodeT **nodes, nodeT *ground, long *arcrowptr,
+			long *arccolptr, long *arcdirptr, long nrow,
 			long ncol, nodesuppT **nodesupp);
 nodeT *NeighborNodeNonGrid(nodeT *node1, long arcnum, long *upperarcnumptr,
-			   nodeT **nodes, nodeT *ground, long *arcrowptr, 
-			   long *arccolptr, long *arcdirptr, long nrow, 
+			   nodeT **nodes, nodeT *ground, long *arcrowptr,
+			   long *arccolptr, long *arcdirptr, long nrow,
 			   long ncol, nodesuppT **nodesupp);
-void GetArcGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol, 
+void GetArcGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol,
 		long *arcdir, long nrow, long ncol, nodesuppT **nodesupp);
-void GetArcNonGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol, 
+void GetArcNonGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol,
 		   long *arcdir, long nrow, long ncol, nodesuppT **nodesupp);
-void NonDegenUpdateChildren(nodeT *startnode, nodeT *lastnode, 
-			    nodeT *nextonpath, long dgroup, 
+void NonDegenUpdateChildren(nodeT *startnode, nodeT *lastnode,
+			    nodeT *nextonpath, long dgroup,
 			    long ngroundarcs, long nflow, nodeT **nodes,
-			    nodesuppT **nodesupp, nodeT *ground, 
-			    nodeT ***apexes, incrcostT **incrcosts, 
+			    nodesuppT **nodesupp, nodeT *ground,
+			    nodeT ***apexes, incrcostT **incrcosts,
 			    long nrow, long ncol, paramT *params);
-void InitNetwork(short **flows, long *ngroundarcsptr, long *ncycleptr, 
-		 long *nflowdoneptr, long *mostflowptr, long *nflowptr, 
-		 long *candidatebagsizeptr, candidateT **candidatebagptr, 
-		 long *candidatelistsizeptr, candidateT **candidatelistptr, 
-		 signed char ***iscandidateptr, nodeT ****apexesptr, 
-		 bucketT **bktsptr, long *iincrcostfileptr, 
-		 incrcostT ***incrcostsptr, nodeT ***nodesptr, nodeT *ground, 
-		 long *nnoderowptr, short **nnodesperrowptr, long *narcrowptr,
-		 short **narcsperrowptr, long nrow, long ncol, 
+void InitNetwork(int **flows, long *ngroundarcsptr, long *ncycleptr,
+		 long *nflowdoneptr, long *mostflowptr, long *nflowptr,
+		 long *candidatebagsizeptr, candidateT **candidatebagptr,
+		 long *candidatelistsizeptr, candidateT **candidatelistptr,
+		 signed char ***iscandidateptr, nodeT ****apexesptr,
+		 bucketT **bktsptr, long *iincrcostfileptr,
+		 incrcostT ***incrcostsptr, nodeT ***nodesptr, nodeT *ground,
+		 long *nnoderowptr, int **nnodesperrowptr, long *narcrowptr,
+		 int **narcsperrowptr, long nrow, long ncol,
 		 signed char *notfirstloopptr, totalcostT *totalcostptr,
 		 paramT *params);
 void InitNodeNums(long nrow, long ncol, nodeT **nodes, nodeT *ground);
@@ -840,129 +856,129 @@ void BucketRemove(nodeT *node, long ind, bucketT *bkts);
 nodeT *ClosestNode(bucketT *bkts);
 nodeT *ClosestNodeCircular(bucketT *bkts);
 nodeT *MinOutCostNode(bucketT *bkts);
-nodeT *SelectSource(nodeT **nodes, nodeT *ground, long nflow, 
-		    short **flows, long ngroundarcs, 
+nodeT *SelectSource(nodeT **nodes, nodeT *ground, long nflow,
+		    int **flows, long ngroundarcs,
 		    long nrow, long ncol, paramT *params);
-short GetCost(incrcostT **incrcosts, long arcrow, long arccol, 
+int GetCost(incrcostT **incrcosts, long arcrow, long arccol,
 	      long arcdir);
-long ReCalcCost(void **costs, incrcostT **incrcosts, long flow, 
-		long arcrow, long arccol, long nflow, long nrow, 
+long ReCalcCost(void **costs, incrcostT **incrcosts, long flow,
+		long arcrow, long arccol, long nflow, long nrow,
 		paramT *params);
-void SetupIncrFlowCosts(void **costs, incrcostT **incrcosts, short **flows,
-			long nflow, long nrow, long narcrow, 
-			short *narcsperrow, paramT *params);
-totalcostT EvaluateTotalCost(void **costs, short **flows, long nrow, long ncol,
-			     short *narcsperrow,paramT *params);
-void MSTInitFlows(float **wrappedphase, short ***flowsptr, 
-		  short **mstcosts, long nrow, long ncol, 
+void SetupIncrFlowCosts(void **costs, incrcostT **incrcosts, int **flows,
+			long nflow, long nrow, long narcrow,
+			int *narcsperrow, paramT *params);
+totalcostT EvaluateTotalCost(void **costs, int **flows, long nrow, long ncol,
+			     int *narcsperrow,paramT *params);
+void MSTInitFlows(float **wrappedphase, int ***flowsptr,
+		  int **mstcosts, long nrow, long ncol,
 		  nodeT ***nodes, nodeT *ground, long maxflow);
-void SolveMST(nodeT **nodes, nodeT *source, nodeT *ground, 
-	      bucketT *bkts, short **mstcosts, signed char **residue, 
+void SolveMST(nodeT **nodes, nodeT *source, nodeT *ground,
+	      bucketT *bkts, int **mstcosts, signed char **residue,
 	      signed char **arcstatus, long nrow, long ncol);
-long DischargeTree(nodeT *source, short **mstcosts, short **flows,
-		   signed char **residue, signed char **arcstatus, 
+long DischargeTree(nodeT *source, int **mstcosts, int **flows,
+		   signed char **residue, signed char **arcstatus,
 		   nodeT **nodes, nodeT *ground, long nrow, long ncol);
-signed char ClipFlow(signed char **residue, short **flows, 
-		     short **mstcosts, long nrow, long ncol, 
+signed char ClipFlow(signed char **residue, int **flows,
+		     int **mstcosts, long nrow, long ncol,
 		     long maxflow);
-void MCFInitFlows(float **wrappedphase, short ***flowsptr, short **mstcosts, 
+void MCFInitFlows(float **wrappedphase, int ***flowsptr, int **mstcosts,
 		  long nrow, long ncol, long cs2scalefactor);
 
 
 /* functions in snaphu_cost.c */
 
-void BuildCostArrays(void ***costsptr, short ***mstcostsptr, 
-		     float **mag, float **wrappedphase, 
-		     float **unwrappedest, long linelen, long nlines, 
-		     long nrow, long ncol, paramT *params, 
-		     tileparamT *tileparams, infileT *infiles, 
+void BuildCostArrays(void ***costsptr, int ***mstcostsptr,
+		     float **mag, float **wrappedphase,
+		     float **unwrappedest, long linelen, long nlines,
+		     long nrow, long ncol, paramT *params,
+		     tileparamT *tileparams, infileT *infiles,
 		     outfileT *outfiles);
-void **BuildStatCostsTopo(float **wrappedphase, float **mag, 
-			  float **unwrappedest, float **pwr, 
-			  float **corr, short **rowweight, short **colweight,
-			  long nrow, long ncol, tileparamT *tileparams, 
+void **BuildStatCostsTopo(float **wrappedphase, float **mag,
+			  float **unwrappedest, float **pwr,
+			  float **corr, int **rowweight, int **colweight,
+			  long nrow, long ncol, tileparamT *tileparams,
 			  outfileT *outfiles, paramT *params);
-void **BuildStatCostsDefo(float **wrappedphase, float **mag, 
-			  float **unwrappedest, float **corr, 
-			  short **rowweight, short **colweight,
-			  long nrow, long ncol, tileparamT *tileparams, 
+void **BuildStatCostsDefo(float **wrappedphase, float **mag,
+			  float **unwrappedest, float **corr,
+			  int **rowweight, int **colweight,
+			  long nrow, long ncol, tileparamT *tileparams,
 			  outfileT *outfiles, paramT *params);
-void **BuildStatCostsSmooth(float **wrappedphase, float **mag, 
-			    float **unwrappedest, float **corr, 
-			    short **rowweight, short **colweight,
-			    long nrow, long ncol, tileparamT *tileparams, 
+void **BuildStatCostsSmooth(float **wrappedphase, float **mag,
+			    float **unwrappedest, float **corr,
+			    int **rowweight, int **colweight,
+			    long nrow, long ncol, tileparamT *tileparams,
 			    outfileT *outfiles, paramT *params);
-void GetIntensityAndCorrelation(float **mag, float **wrappedphase, 
-				float ***pwrptr, float ***corrptr, 
+void GetIntensityAndCorrelation(float **mag, float **wrappedphase,
+				float ***pwrptr, float ***corrptr,
 				infileT *infiles, long linelen, long nlines,
-				long nrow, long ncol, outfileT *outfiles, 
+				long nrow, long ncol, outfileT *outfiles,
 				paramT *params, tileparamT *tileparams);
-void RemoveMean(float **ei, long nrow, long ncol, 
+void RemoveMean(float **ei, long nrow, long ncol,
                 long krowei, long kcolei);
-float *BuildDZRCritLookupTable(double *nominc0ptr, double *dnomincptr, 
+float *BuildDZRCritLookupTable(double *nominc0ptr, double *dnomincptr,
 			       long *tablesizeptr, tileparamT *tileparams,
 			       paramT *params);
-double SolveDZRCrit(double sinnomincangle, double cosnomincangle, 
+double SolveDZRCrit(double sinnomincangle, double cosnomincangle,
 		    paramT *params, double threshold);
-void SolveEIModelParams(double *slope1ptr, double *slope2ptr, 
-			double *const1ptr, double *const2ptr, 
-			double dzrcrit, double dzr0, double sinnomincangle, 
+void SolveEIModelParams(double *slope1ptr, double *slope2ptr,
+			double *const1ptr, double *const2ptr,
+			double dzrcrit, double dzr0, double sinnomincangle,
 			double cosnomincangle, paramT *params);
 double EIofDZR(double dzr, double sinnomincangle, double cosnomincangle,
 	       paramT *params);
-float **BuildDZRhoMaxLookupTable(double nominc0, double dnominc, 
-				 long nominctablesize, double rhomin, 
+float **BuildDZRhoMaxLookupTable(double nominc0, double dnominc,
+				 long nominctablesize, double rhomin,
 				 double drho, long nrho, paramT *params);
-double CalcDZRhoMax(double rho, double nominc, paramT *params, 
+double CalcDZRhoMax(double rho, double nominc, paramT *params,
 		    double threshold);
-void CalcCostTopo(void **costs, long flow, long arcrow, long arccol, 
-		  long nflow, long nrow, paramT *params, 
+void CalcCostTopo(void **costs, long flow, long arcrow, long arccol,
+		  long nflow, long nrow, paramT *params,
 		  long *poscostptr, long *negcostptr);
-void CalcCostDefo(void **costs, long flow, long arcrow, long arccol, 
-		  long nflow, long nrow, paramT *params, 
+void CalcCostDefo(void **costs, long flow, long arcrow, long arccol,
+		  long nflow, long nrow, paramT *params,
 		  long *poscostptr, long *negcostptr);
-void CalcCostSmooth(void **costs, long flow, long arcrow, long arccol, 
-		    long nflow, long nrow, paramT *params, 
+void CalcCostSmooth(void **costs, long flow, long arcrow, long arccol,
+		    long nflow, long nrow, paramT *params,
 		    long *poscostptr, long *negcostptr);
-void CalcCostL0(void **costs, long flow, long arcrow, long arccol, 
-		long nflow, long nrow, paramT *params, 
+void CalcCostL0(void **costs, long flow, long arcrow, long arccol,
+		long nflow, long nrow, paramT *params,
 		long *poscostptr, long *negcostptr);
-void CalcCostL1(void **costs, long flow, long arcrow, long arccol, 
-		long nflow, long nrow, paramT *params, 
+void CalcCostL1(void **costs, long flow, long arcrow, long arccol,
+		long nflow, long nrow, paramT *params,
 		long *poscostptr, long *negcostptr);
-void CalcCostL2(void **costs, long flow, long arcrow, long arccol, 
-		long nflow, long nrow, paramT *params, 
+void CalcCostL2(void **costs, long flow, long arcrow, long arccol,
+		long nflow, long nrow, paramT *params,
 		long *poscostptr, long *negcostptr);
-void CalcCostLP(void **costs, long flow, long arcrow, long arccol, 
-		long nflow, long nrow, paramT *params, 
+void CalcCostLP(void **costs, long flow, long arcrow, long arccol,
+		long nflow, long nrow, paramT *params,
 		long *poscostptr, long *negcostptr);
-void CalcCostNonGrid(void **costs, long flow, long arcrow, long arccol, 
-		     long nflow, long nrow, paramT *params, 
+void CalcCostNonGrid(void **costs, long flow, long arcrow, long arccol,
+		     long nflow, long nrow, paramT *params,
 		     long *poscostptr, long *negcostptr);
-long EvalCostTopo(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostTopo(void **costs, int **flows, long arcrow, long arccol,
 		  long nrow, paramT *params);
-long EvalCostDefo(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostDefo(void **costs, int **flows, long arcrow, long arccol,
 		  long nrow, paramT *params);
-long EvalCostSmooth(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostSmooth(void **costs, int **flows, long arcrow, long arccol,
 		    long nrow, paramT *params);
-long EvalCostL0(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostL0(void **costs, int **flows, long arcrow, long arccol,
 		long nrow, paramT *params);
-long EvalCostL1(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostL1(void **costs, int **flows, long arcrow, long arccol,
 		long nrow, paramT *params);
-long EvalCostL2(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostL2(void **costs, int **flows, long arcrow, long arccol,
 		long nrow, paramT *params);
-long EvalCostLP(void **costs, short **flows, long arcrow, long arccol,
+long EvalCostLP(void **costs, int **flows, long arcrow, long arccol,
 		long nrow, paramT *params);
-long EvalCostNonGrid(void **costs, short **flows, long arcrow, long arccol, 
+long EvalCostNonGrid(void **costs, int **flows, long arcrow, long arccol,
 		     long nrow, paramT *params);
 void CalcInitMaxFlow(paramT *params, void **costs, long nrow, long ncol);
 
 
 /* functions in snaphu_util.c */
 
-int IsTrue(char *str);
-int IsFalse(char *str);
-signed char SetBooleanSignedChar(signed char *boolptr, char *str);
+int IsTrue(const char *str);
+int IsFalse(const char *str);
+signed char SetBooleanSignedChar(signed char *boolptr, const char *str);
 double ModDiff(double f1, double f2);
 void WrapPhase(float **wrappedphase, long nrow, long ncol);
 void CalcWrappedRangeDiffs(float **dpsi, float **avgdpsi, float **wrappedphase,
@@ -970,15 +986,15 @@ void CalcWrappedRangeDiffs(float **dpsi, float **avgdpsi, float **wrappedphase,
 			   long nrow, long ncol);
 void CalcWrappedAzDiffs(float **dpsi, float **avgdpsi, float **wrappedphase,
 			long kperpdpsi, long kpardpsi, long nrow, long ncol);
-void CycleResidue(float **phase, signed char **residue, 
+void CycleResidue(float **phase, signed char **residue,
 		  int nrow, int ncol);
-void CalcFlow(float **phase, short ***flowsptr, long nrow, long ncol);
-void IntegratePhase(float **psi, float **phi, short **flows,
+void CalcFlow(float **phase, int ***flowsptr, long nrow, long ncol);
+void IntegratePhase(float **psi, float **phi, int **flows,
 		    long nrow, long ncol);
-float **ExtractFlow(float **unwrappedphase, short ***flowsptr, 
+float **ExtractFlow(float **unwrappedphase, int ***flowsptr,
 		    long nrow, long ncol);
 void FlipPhaseArraySign(float **arr, paramT *params, long nrow, long ncol);
-void FlipFlowArraySign(short **arr, paramT *params, long nrow, long ncol);
+void FlipFlowArraySign(int **arr, paramT *params, long nrow, long ncol);
 void **Get2DMem(int nrow, int ncol, int psize, size_t size);
 void **Get2DRowColMem(long nrow, long ncol, int psize, size_t size);
 void **Get2DRowColZeroMem(long nrow, long ncol, int psize, size_t size);
@@ -986,24 +1002,24 @@ void *MAlloc(size_t size);
 void *CAlloc(size_t nitems, size_t size);
 void *ReAlloc(void *ptr, size_t size);
 void Free2DArray(void **array, unsigned int nrow);
-void Set2DShortArray(short **arr, long nrow, long ncol, long value);
+void Set2DIntArray(int **arr, long nrow, long ncol, long value);
 signed char ValidDataArray(float **arr, long nrow, long ncol);
 signed char IsFinite(double d);
 long LRound(double a);
-long Short2DRowColAbsMax(short **arr, long nrow, long ncol);
+long Int2DRowColAbsMax(int **arr, long nrow, long ncol);
 float LinInterp1D(float *arr, double index, long nelem);
-float LinInterp2D(float **arr, double rowind, double colind , 
+float LinInterp2D(float **arr, double rowind, double colind ,
                   long nrow, long ncol);
 void Despeckle(float **mag, float ***ei, long nrow, long ncol);
 float **MirrorPad(float **array1, long nrow, long ncol, long krow, long kcol);
-void BoxCarAvg(float **avgarr, float **padarr, long nrow, long ncol, 
+void BoxCarAvg(float **avgarr, float **padarr, long nrow, long ncol,
 	       long krow, long kcol);
 char *StrNCopy(char *dest, const char *src, size_t n);
-void FlattenWrappedPhase(float **wrappedphase, float **unwrappedest, 
+void FlattenWrappedPhase(float **wrappedphase, float **unwrappedest,
 			 long nrow, long ncol);
 void Add2DFloatArrays(float **arr1, float **arr2, long nrow, long ncol);
-int StringToDouble(char *str, double *d);
-int StringToLong(char *str, long *l);
+int StringToDouble(const char *str, double *d);
+int StringToLong(const char *str, long *l);
 void CatchSignals(void (*SigHandler)(int));
 void SetDump(int signum);
 void KillChildrenExit(int signum);
@@ -1015,73 +1031,73 @@ int LongCompare(const void *c1, const void *c2);
 /* functions in snaphu_io.c */
 
 void SetDefaults(infileT *infiles, outfileT *outfiles, paramT *params);
-void ProcessArgs(int argc, char *argv[], infileT *infiles, outfileT *outfiles,
+void ProcessArgs(int argc, const char **argv, infileT *infiles, outfileT *outfiles,
 		 long *ncolptr, paramT *params);
-void CheckParams(infileT *infiles, outfileT *outfiles, 
+void CheckParams(infileT *infiles, outfileT *outfiles,
 		 long linelen, long nlines, paramT *params);
-void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
+void ReadConfigFile(const char *conffile, infileT *infiles, outfileT *outfiles,
 		    long *ncolptr, paramT *params);
-void WriteConfigLogFile(int argc, char *argv[], infileT *infiles, 
+void WriteConfigLogFile(int argc, const char **argv, infileT *infiles,
 			outfileT *outfiles, long linelen, paramT *params);
-void LogStringParam(FILE *fp, char *key, char *value);
-void LogBoolParam(FILE *fp, char *key, signed char boolvalue);
-void LogFileFormat(FILE *fp, char *key, signed char fileformat);
+void LogStringParam(FILE *fp, const char *key, const char *value);
+void LogBoolParam(FILE *fp, const char *key, signed char boolvalue);
+void LogFileFormat(FILE *fp, const char *key, signed char fileformat);
 long GetNLines(infileT *infiles, long linelen);
-void WriteOutputFile(float **mag, float **unwrappedphase, char *outfile, 
+void WriteOutputFile(float **mag, float **unwrappedphase, const char *outfile,
 		     outfileT *outfiles, long nrow, long ncol);
-FILE *OpenOutputFile(char *outfile, char *realoutfile);
-void WriteAltLineFile(float **mag, float **phase, char *outfile, 
+FILE *OpenOutputFile(const char *outfile, char *realoutfile);
+void WriteAltLineFile(float **mag, float **phase, const char *outfile,
 		      long nrow, long ncol);
-void WriteAltSampFile(float **arr1, float **arr2, char *outfile, 
+void WriteAltSampFile(float **arr1, float **arr2, const char *outfile,
 		      long nrow, long ncol);
-void Write2DArray(void **array, char *filename, long nrow, long ncol, 
+void Write2DArray(void **array, const char *filename, long nrow, long ncol,
 		  size_t size);
-void Write2DRowColArray(void **array, char *filename, long nrow, 
+void Write2DRowColArray(void **array, const char *filename, long nrow,
 			long ncol, size_t size);
 void ReadInputFile(infileT *infiles, float ***magptr, float ***wrappedphaseptr,
-		   short ***flowsptr, long linelen, long nlines, 
+		   int ***flowsptr, long linelen, long nlines,
 		   paramT *params, tileparamT *tileparams);
-void ReadMagnitude(float **mag, infileT *infiles, long linelen, long nlines, 
+void ReadMagnitude(float **mag, infileT *infiles, long linelen, long nlines,
 		   tileparamT *tileparams);
-void ReadUnwrappedEstimateFile(float ***unwrappedestptr, infileT *infiles, 
-			       long linelen, long nlines, 
+void ReadUnwrappedEstimateFile(float ***unwrappedestptr, infileT *infiles,
+			       long linelen, long nlines,
 			       paramT *params, tileparamT *tileparams);
-void ReadWeightsFile(short ***weightsptr,char *weightfile, 
+void ReadWeightsFile(int ***weightsptr,const char *weightfile,
 		     long linelen, long nlines, tileparamT *tileparams);
-void ReadIntensity(float ***pwrptr, float ***pwr1ptr, float ***pwr2ptr, 
-		   infileT *infiles, long linelen, long nlines, 
+void ReadIntensity(float ***pwrptr, float ***pwr1ptr, float ***pwr2ptr,
+		   infileT *infiles, long linelen, long nlines,
 		   paramT *params, tileparamT *tileparams);
 void ReadCorrelation(float ***corrptr, infileT *infiles,
 		     long linelen, long nlines, tileparamT *tileparams);
-void ReadAltLineFile(float ***mag, float ***phase, char *alfile, 
+void ReadAltLineFile(float ***mag, float ***phase, const char *alfile,
 		     long linelen, long nlines, tileparamT *tileparams);
-void ReadAltLineFilePhase(float ***phase, char *alfile, 
+void ReadAltLineFilePhase(float ***phase, const char *alfile,
 			  long linelen, long nlines, tileparamT *tileparams);
-void ReadComplexFile(float ***mag, float ***phase, char *rifile, 
+void ReadComplexFile(float ***mag, float ***phase, const char *rifile,
 		     long linelen, long nlines, tileparamT *tileparams);
-void Read2DArray(void ***arr, char *infile, long linelen, long nlines, 
+void Read2DArray(void ***arr, const char *infile, long linelen, long nlines,
 		 tileparamT *tileparams, size_t elptrsize, size_t elsize);
-void ReadAltSampFile(float ***arr1, float ***arr2, char *infile,
+void ReadAltSampFile(float ***arr1, float ***arr2, const char *infile,
 		     long linelen, long nlines, tileparamT *tileparams);
-void Read2DRowColFile(void ***arr, char *filename, long linelen, long nlines, 
+void Read2DRowColFile(void ***arr, const char *filename, long linelen, long nlines,
 		      tileparamT *tileparams, size_t size);
-void Read2DRowColFileRows(void ***arr, char *filename, long linelen, 
+void Read2DRowColFileRows(void ***arr, const char *filename, long linelen,
 			  long nlines, tileparamT *tileparams, size_t size);
 void SetDumpAll(outfileT *outfiles, paramT *params);
 void SetStreamPointers(void);
 void SetVerboseOut(paramT *params);
 void ChildResetStreamPointers(pid_t pid, long tilerow, long tilecol,
 			      paramT *params);
-void DumpIncrCostFiles(incrcostT **incrcosts, long iincrcostfile, 
+void DumpIncrCostFiles(incrcostT **incrcosts, long iincrcostfile,
 		       long nflow, long nrow, long ncol);
 void MakeTileDir(paramT *params, outfileT *outfiles);
-void ParseFilename(char *filename, char *path, char *basename);
+void ParseFilename(const char *filename, char *path, char *basename);
 
 
 /* functions in snaphu_cs2.c  */
 
-void SolveCS2(signed char **residue, short **mstcosts, long nrow, long ncol, 
-	      long cs2scalefactor, short ***flowsptr);
+void SolveCS2(signed char **residue, int **mstcosts, long nrow, long ncol,
+	      long cs2scalefactor, int ***flowsptr);
 
 
 
@@ -1102,12 +1118,15 @@ extern FILE *sp0, *sp1, *sp2, *sp3;
 extern nodeT NONTREEARC[1];
 
 /* pointers to functions which calculate arc costs */
-extern void (*CalcCost)();
-extern long (*EvalCost)();
+extern void (*CalcCost)(void**, long int, long int, long int,
+                        long int, long int, paramT*, long int*, long int*);
+extern long (*EvalCost)(void **, int **, long, long,  long, paramT*);
 
 /* pointers to functions for tailoring network solver to specific topologies */
-extern nodeT *(*NeighborNode)();
-extern void (*GetArc)();
+extern nodeT *(*NeighborNode)(nodeT *, long, long*, nodeT**, nodeT*, long*,
+                              long*, long*, long, long, nodesuppT**);
+extern void (*GetArc)(nodeT*, nodeT*, long*, long*,
+                      long*, long, long, nodesuppT**);
 
 /* end of snaphu.h */
 

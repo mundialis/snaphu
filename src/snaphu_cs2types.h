@@ -38,8 +38,8 @@ typedef long excess_t;
 typedef  /* arc */
    struct arc_st
 {
-   short            r_cap;           /* residual capasity */
-   short            cost;            /* cost  of the arc*/
+   int            r_cap;           /* residual capasity */
+   int            cost;            /* cost  of the arc*/
    struct node_st   *head;           /* head node */
    struct arc_st    *sister;         /* opposite arc */
 }
