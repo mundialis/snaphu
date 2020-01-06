@@ -15,7 +15,7 @@
 
 #CC		=	cc
 #CFLAGS		=	-static -O3 # -D NO_CS2
-CFLAGS		+= -O3 # -D NO_CS2
+CFLAGS		+=	-O3 # -D NO_CS2
 LIBS		=	-lm
 BINDIR		=	../bin
 INSTALLDIR	=	/usr/local/bin

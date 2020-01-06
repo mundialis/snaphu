@@ -16,6 +16,7 @@
 #include <float.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -31,15 +32,15 @@
  * ---------------------
  * Solves the nonlinear network optimization problem.
  */
-long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground, 
-	       nodeT *source, candidateT **candidatelistptr, 
+long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
+	       nodeT *source, candidateT **candidatelistptr,
 	       candidateT **candidatebagptr, long *candidatelistsizeptr,
-	       long *candidatebagsizeptr, bucketT *bkts, short **flows, 
-	       void **costs, incrcostT **incrcosts, nodeT ***apexes, 
-	       signed char **iscandidate, long ngroundarcs, long nflow, 
-	       float **mag, float **wrappedphase, char *outfile, 
-	       long nnoderow, short *nnodesperrow, long narcrow, 
-	       short *narcsperrow, long nrow, long ncol,
+	       long *candidatebagsizeptr, bucketT *bkts, int **flows,
+	       void **costs, incrcostT **incrcosts, nodeT ***apexes,
+	       signed char **iscandidate, long ngroundarcs, long nflow,
+	       float **mag, float **wrappedphase, const char *outfile,
+	       long nnoderow, int *nnodesperrow, long narcrow,
+	       int *narcsperrow, long nrow, long ncol,
 	       outfileT *outfiles, paramT *params){
 
   long i, row, col, arcrow, arccol, arcdir, arcnum, upperarcnum;
@@ -53,7 +54,7 @@ long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
   candidateT *candidatelist, *candidatebag, *tempcandidateptr;
   nodeT *from, *to, *cycleapex, *node1, *node2, *leavingparent, *leavingchild;
   nodeT *root, *mntpt, *oldmntpt, *skipthread, *tempnode1, *tempnode2;
-  nodeT *firstfromnode=NULL, *firsttonode=NULL;
+  nodeT *firstfromnode = NULL, *firsttonode = NULL;
   nodeT **apexlist;
   float **unwrappedphase;
 
@@ -72,7 +73,7 @@ long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
 		  incrcosts,apexes,iscandidate,nnoderow,nnodesperrow,
 		  narcrow,narcsperrow,nrow,ncol,params);
   apexlistlen=INITARRSIZE;
-  apexlist=MAlloc(apexlistlen*sizeof(nodeT *));
+  apexlist = (nodeT**)MAlloc(apexlistlen*sizeof(nodeT *));
   groupcounter=2;
   ipivots=0;
   inondegen=0;
@@ -530,7 +531,7 @@ long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
 	    /* make sure we have enough memory for the apex list */
 	    if(groupcounter-apexlistbase+1>apexlistlen){
 	      apexlistlen=1.5*(groupcounter-apexlistbase+1); 
-	      apexlist=ReAlloc(apexlist,apexlistlen*sizeof(nodeT *));
+	      apexlist= (nodeT**)ReAlloc(apexlist,apexlistlen*sizeof(nodeT *));
 	    }
         
 	    /* set the apex list */
@@ -750,8 +751,8 @@ long TreeSolve(nodeT **nodes, nodesuppT **nodesupp, nodeT *ground,
  * outcosts of to node if the new distance is less or if to's pred is
  * from (then we have to do the update).
  */
-void AddNewNode(nodeT *from, nodeT *to, long arcdir, bucketT *bkts, 
-		long nflow, incrcostT **incrcosts, long arcrow, long arccol, 
+void AddNewNode(nodeT *from, nodeT *to, long arcdir, bucketT *bkts,
+		long nflow, incrcostT **incrcosts, long arcrow, long arccol,
 		paramT *params){
   
   long newoutcost;
@@ -795,12 +796,12 @@ void AddNewNode(nodeT *from, nodeT *to, long arcdir, bucketT *bkts,
  * Given a from and to node, checks for negative reduced cost, and adds
  * the arc to the entering arc candidate bag if one is found.
  */
-void CheckArcReducedCost(nodeT *from, nodeT *to, nodeT *apex, 
-			 long arcrow, long arccol, long arcdir, 
-			 long nflow, nodeT **nodes, nodeT *ground, 
-			 candidateT **candidatebagptr, 
-			 long *candidatebagnextptr, 
-			 long *candidatebagsizeptr, incrcostT **incrcosts, 
+void CheckArcReducedCost(nodeT *from, nodeT *to, nodeT *apex,
+			 long arcrow, long arccol, long arcdir,
+			 long nflow, nodeT **nodes, nodeT *ground,
+			 candidateT **candidatebagptr,
+			 long *candidatebagnextptr,
+			 long *candidatebagsizeptr, incrcostT **incrcosts,
 			 signed char **iscandidate, paramT *params){
 
   long apexcost, fwdarcdist, revarcdist, violation;
@@ -846,8 +847,9 @@ void CheckArcReducedCost(nodeT *from, nodeT *to, nodeT *apex,
   if(violation<0){
     if((*candidatebagnextptr)>=(*candidatebagsizeptr)){
       (*candidatebagsizeptr)+=CANDIDATEBAGSTEP;
-      (*candidatebagptr)=ReAlloc(*candidatebagptr,
-				 (*candidatebagsizeptr)*sizeof(candidateT));
+      (*candidatebagptr)=
+          (candidateT*)ReAlloc(*candidatebagptr,
+                                (*candidatebagsizeptr)*sizeof(candidateT));
     }
     (*candidatebagptr)[*candidatebagnextptr].violation=violation;
     (*candidatebagptr)[*candidatebagnextptr].from=from;
@@ -865,11 +867,11 @@ void CheckArcReducedCost(nodeT *from, nodeT *to, nodeT *apex,
 /* function: InitTree()
  * --------------------
  */
-long InitTree(nodeT *source, nodeT **nodes, nodesuppT **nodesupp, 
-	      nodeT *ground, long ngroundarcs, bucketT *bkts, long nflow, 
-	      incrcostT **incrcosts, nodeT ***apexes, 
-	      signed char **iscandidate, long nnoderow, short *nnodesperrow, 
-	      long narcrow, short *narcsperrow, long nrow, long ncol, 
+long InitTree(nodeT *source, nodeT **nodes, nodesuppT **nodesupp,
+	      nodeT *ground, long ngroundarcs, bucketT *bkts, long nflow,
+	      incrcostT **incrcosts, nodeT ***apexes,
+	      signed char **iscandidate, long nnoderow, int *nnodesperrow,
+	      long narcrow, int *narcsperrow, long nrow, long ncol,
 	      paramT *params){
 
   long row, col, arcnum, upperarcnum, arcrow, arccol, arcdir, nnodes;
@@ -1012,8 +1014,8 @@ int CandidateCompare(const void *c1, const void *c2){
  * given arc number for a grid network with a ground node.
  */
 nodeT *NeighborNodeGrid(nodeT *node1, long arcnum, long *upperarcnumptr,
-			nodeT **nodes, nodeT *ground, long *arcrowptr, 
-			long *arccolptr, long *arcdirptr, long nrow, 
+			nodeT **nodes, nodeT *ground, long *arcrowptr,
+			long *arccolptr, long *arcdirptr, long nrow,
 			long ncol, nodesuppT **nodesupp){
   long row, col;
 
@@ -1095,8 +1097,8 @@ nodeT *NeighborNodeGrid(nodeT *node1, long arcnum, long *upperarcnumptr,
  * given arc number for a nongrid network (ie, arbitrary topology).
  */
 nodeT *NeighborNodeNonGrid(nodeT *node1, long arcnum, long *upperarcnumptr,
-			   nodeT **nodes, nodeT *ground, long *arcrowptr, 
-			   long *arccolptr, long *arcdirptr, long nrow, 
+			   nodeT **nodes, nodeT *ground, long *arcrowptr,
+			   long *arccolptr, long *arcdirptr, long nrow,
 			   long ncol, nodesuppT **nodesupp){
 
   long tilenum, nodenum;
@@ -1128,7 +1130,7 @@ nodeT *NeighborNodeNonGrid(nodeT *node1, long arcnum, long *upperarcnumptr,
  * Given a from node and a to node, sets pointers for indices into
  * arc arrays, assuming primary (grid) network.
  */
-void GetArcGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol, 
+void GetArcGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol,
 		long *arcdir, long nrow, long ncol, nodesuppT **nodesupp){
 
   long fromrow, fromcol, torow, tocol;
@@ -1196,7 +1198,7 @@ void GetArcGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol,
  * Given a from node and a to node, sets pointers for indices into
  * arc arrays, assuming secondary (arbitrary topology) network.
  */
-void GetArcNonGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol, 
+void GetArcNonGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol,
 		   long *arcdir, long nrow, long ncol, nodesuppT **nodesupp){
 
   long tilenum, nodenum, arcnum;
@@ -1227,14 +1229,14 @@ void GetArcNonGrid(nodeT *from, nodeT *to, long *arcrow, long *arccol,
 
 /* Function: NonDegenUpdateChildren()
  * ----------------------------------
- * Updates potentials and groups of all childredn along an augmenting path, 
+ * Updates potentials and groups of all childredn along an augmenting path,
  * until a stop node is hit.
  */
-void NonDegenUpdateChildren(nodeT *startnode, nodeT *lastnode, 
-			    nodeT *nextonpath, long dgroup, 
+void NonDegenUpdateChildren(nodeT *startnode, nodeT *lastnode,
+			    nodeT *nextonpath, long dgroup,
 			    long ngroundarcs, long nflow, nodeT **nodes,
-			    nodesuppT **nodesupp, nodeT *ground, 
-			    nodeT ***apexes, incrcostT **incrcosts, 
+			    nodesuppT **nodesupp, nodeT *ground,
+			    nodeT ***apexes, incrcostT **incrcosts,
 			    long nrow, long ncol, paramT *params){
 
   nodeT *node1, *node2;
@@ -1294,15 +1296,15 @@ void NonDegenUpdateChildren(nodeT *startnode, nodeT *lastnode,
 /* function: InitNetowrk()
  * -----------------------
  */
-void InitNetwork(short **flows, long *ngroundarcsptr, long *ncycleptr, 
-		 long *nflowdoneptr, long *mostflowptr, long *nflowptr, 
-		 long *candidatebagsizeptr, candidateT **candidatebagptr, 
-		 long *candidatelistsizeptr, candidateT **candidatelistptr, 
-		 signed char ***iscandidateptr, nodeT ****apexesptr, 
-		 bucketT **bktsptr, long *iincrcostfileptr, 
-		 incrcostT ***incrcostsptr, nodeT ***nodesptr, nodeT *ground, 
-		 long *nnoderowptr, short **nnodesperrowptr, long *narcrowptr,
-		 short **narcsperrowptr, long nrow, long ncol, 
+void InitNetwork(int **flows, long *ngroundarcsptr, long *ncycleptr,
+		 long *nflowdoneptr, long *mostflowptr, long *nflowptr,
+		 long *candidatebagsizeptr, candidateT **candidatebagptr,
+		 long *candidatelistsizeptr, candidateT **candidatelistptr,
+		 signed char ***iscandidateptr, nodeT ****apexesptr,
+		 bucketT **bktsptr, long *iincrcostfileptr,
+		 incrcostT ***incrcostsptr, nodeT ***nodesptr, nodeT *ground,
+		 long *nnoderowptr, int **nnodesperrowptr, long *narcrowptr,
+		 int **narcsperrowptr, long nrow, long ncol,
 		 signed char *notfirstloopptr, totalcostT *totalcostptr,
 		 paramT *params){
 
@@ -1331,15 +1333,17 @@ void InitNetwork(short **flows, long *ngroundarcsptr, long *ncycleptr,
   *ncycleptr=0;
   *nflowptr=1;
   *candidatebagsizeptr=INITARRSIZE;
-  *candidatebagptr=MAlloc(*candidatebagsizeptr*sizeof(candidateT));
+/*  *candidatebagptr= (candidateST*)MAlloc(*candidatebagsizeptr*sizeof(candidateT)); */
+  *candidatebagptr= (candidateT*)MAlloc(*candidatebagsizeptr*sizeof(candidateT));
   *candidatelistsizeptr=INITARRSIZE;
-  *candidatelistptr=MAlloc(*candidatelistsizeptr*sizeof(candidateT));
+/*  *candidatelistptr=(candidateST*)MAlloc(*candidatelistsizeptr*sizeof(candidateT)); */
+  *candidatelistptr=(candidateT*)MAlloc(*candidatelistsizeptr*sizeof(candidateT));
   if(ground!=NULL){
     *nflowdoneptr=0;
-    *mostflowptr=Short2DRowColAbsMax(flows,nrow,ncol);
-    if(*mostflowptr*params->nshortcycle>LARGESHORT){
+    *mostflowptr=Int2DRowColAbsMax(flows,nrow,ncol);
+    if(*mostflowptr*params->nintcycle>LARGEINT){
       fprintf(sp1,"Maximum flow on network: %ld\n",*mostflowptr);
-      fprintf(sp0,"((Maximum flow) * NSHORTCYCLE) too large\nAbort\n");
+      fprintf(sp0,"((Maximum flow) * NINTCYCLE) too large\nAbort\n");
       exit(ABNORMAL_EXIT);
     }
     if(ncol>2){
@@ -1355,7 +1359,8 @@ void InitNetwork(short **flows, long *ngroundarcsptr, long *ncycleptr,
   }
 
   /* set up buckets for TreeSolve (MSTInitFlows() has local set of buckets) */
-  *bktsptr=MAlloc(sizeof(bucketT));
+/*  *bktsptr=(bucketST*)MAlloc(sizeof(bucketT)); */
+  *bktsptr=(bucketT*)MAlloc(sizeof(bucketT));
   if(ground!=NULL){
     (*bktsptr)->minind=-LRound((params->maxcost+1)*(nrow+ncol)
 			       *NEGBUCKETFRACTION);
@@ -1384,12 +1389,12 @@ void InitNetwork(short **flows, long *ngroundarcsptr, long *ncycleptr,
   /* set number of nodes and arcs per row */
   if(ground!=NULL){
     (*nnoderowptr)=nrow-1;
-    (*nnodesperrowptr)=(short *)MAlloc((nrow-1)*sizeof(short));
+    (*nnodesperrowptr)=(int *)MAlloc((nrow-1)*sizeof(int));
     for(i=0;i<nrow-1;i++){
       (*nnodesperrowptr)[i]=ncol-1;
     }
     (*narcrowptr)=2*nrow-1;
-    (*narcsperrowptr)=(short *)MAlloc((2*nrow-1)*sizeof(short));
+    (*narcsperrowptr)=(int *)MAlloc((2*nrow-1)*sizeof(int));
     for(i=0;i<nrow-1;i++){
       (*narcsperrowptr)[i]=ncol;
     }
@@ -1651,8 +1656,8 @@ nodeT *MinOutCostNode(bucketT *bkts){
  * longest chain is not guaranteed.  Which end of the longest chain is
  * determined by the sign of params->sourcemode (should be 1 or -1 if not 0).
  */
-nodeT *SelectSource(nodeT **nodes, nodeT *ground, long nflow, 
-		    short **flows, long ngroundarcs, 
+nodeT *SelectSource(nodeT **nodes, nodeT *ground, long nflow,
+		    int **flows, long ngroundarcs,
 		    long nrow, long ncol, paramT *params){
 
   long row, col, maxflowlength, arcnum, upperarcnum;
@@ -1801,7 +1806,7 @@ nodeT *SelectSource(nodeT **nodes, nodeT *ground, long nflow,
  * Returns incremental flow cost for current flow increment dflow from
  * lookup array.  
  */
-short GetCost(incrcostT **incrcosts, long arcrow, long arccol, 
+int GetCost(incrcostT **incrcosts, long arcrow, long arccol,
 	      long arcdir){
 
   /* look up cost and return it for the appropriate arc direction */
@@ -1818,8 +1823,8 @@ short GetCost(incrcostT **incrcosts, long arcrow, long arccol,
  * ----------------------
  * Updates the incremental cost for an arc.
  */
-long ReCalcCost(void **costs, incrcostT **incrcosts, long flow, 
-		long arcrow, long arccol, long nflow, long nrow, 
+long ReCalcCost(void **costs, incrcostT **incrcosts, long flow,
+		long arcrow, long arccol, long nflow, long nrow,
 		paramT *params){
 
   long poscost, negcost, iclipped;
@@ -1828,25 +1833,25 @@ long ReCalcCost(void **costs, incrcostT **incrcosts, long flow,
   CalcCost(costs,flow,arcrow,arccol,nflow,nrow,params,
 	   &poscost,&negcost);
 
-  /* clip costs to short int */
+  /* clip costs to int int */
   iclipped=0;
-  if(poscost>LARGESHORT){
-    incrcosts[arcrow][arccol].poscost=LARGESHORT;
+  if(poscost>LARGEINT){
+    incrcosts[arcrow][arccol].poscost=LARGEINT;
     iclipped++;
   }else{
-    if(poscost<-LARGESHORT){
-      incrcosts[arcrow][arccol].poscost=-LARGESHORT;
+    if(poscost<-LARGEINT){
+      incrcosts[arcrow][arccol].poscost=-LARGEINT;
       iclipped++;
     }else{
       incrcosts[arcrow][arccol].poscost=poscost;
     }
   }
-  if(negcost>LARGESHORT){
-    incrcosts[arcrow][arccol].negcost=LARGESHORT;
+  if(negcost>LARGEINT){
+    incrcosts[arcrow][arccol].negcost=LARGEINT;
     iclipped++;
   }else{
-    if(negcost<-LARGESHORT){
-      incrcosts[arcrow][arccol].negcost=-LARGESHORT;
+    if(negcost<-LARGEINT){
+      incrcosts[arcrow][arccol].negcost=-LARGEINT;
       iclipped++;
     }else{
       incrcosts[arcrow][arccol].negcost=negcost;
@@ -1863,9 +1868,9 @@ long ReCalcCost(void **costs, incrcostT **incrcosts, long flow,
  * Calculates the costs for positive and negative dflow flow increment
  * if there is zero flow on the arc.
  */
-void SetupIncrFlowCosts(void **costs, incrcostT **incrcosts, short **flows,
-			long nflow, long nrow, long narcrow, 
-			short *narcsperrow, paramT *params){
+void SetupIncrFlowCosts(void **costs, incrcostT **incrcosts, int **flows,
+			long nflow, long nrow, long narcrow,
+			int *narcsperrow, paramT *params){
 
   long arcrow, arccol, iclipped, narcs;
   char pl[2];
@@ -1903,8 +1908,8 @@ void SetupIncrFlowCosts(void **costs, incrcostT **incrcosts, short **flows,
  * and ncol if in grid mode (primary network), or pass nrow=ntiles and 
  * ncol=0 for nongrid mode (secondary network).
  */
-totalcostT EvaluateTotalCost(void **costs, short **flows, long nrow, long ncol,
-			     short *narcsperrow,paramT *params){
+totalcostT EvaluateTotalCost(void **costs, int **flows, long nrow, long ncol,
+			     int *narcsperrow,paramT *params){
 
   totalcostT rowcost, totalcost;
   long row, col, maxrow, maxcol;
@@ -1942,13 +1947,13 @@ totalcostT EvaluateTotalCost(void **costs, short **flows, long nrow, long ncol,
  * Initializes the flow on a the network using minimum spanning tree
  * algorithm.  
  */
-void MSTInitFlows(float **wrappedphase, short ***flowsptr, 
-		  short **mstcosts, long nrow, long ncol, 
+void MSTInitFlows(float **wrappedphase, int ***flowsptr,
+		  int **mstcosts, long nrow, long ncol,
 		  nodeT ***nodesptr, nodeT *ground, long maxflow){
 
   long row, col, i, maxcost;
   signed char **residue, **arcstatus;
-  short **flows;
+  int **flows;
   nodeT *source;
   bucketT bkts[1];
 
@@ -1988,8 +1993,8 @@ void MSTInitFlows(float **wrappedphase, short ***flowsptr,
   CycleResidue(wrappedphase,residue,nrow,ncol);
 
   /* get memory for flow arrays */
-  (*flowsptr)=(short **)Get2DRowColZeroMem(nrow,ncol,
-					   sizeof(short *),sizeof(short));
+  (*flowsptr)=(int **)Get2DRowColZeroMem(nrow,ncol,
+					   sizeof(int *),sizeof(int));
   flows=*flowsptr;
 
   /* loop until no flows exceed the maximum flow */
@@ -2051,8 +2056,8 @@ void MSTInitFlows(float **wrappedphase, short ***flowsptr,
  * Dijkstra implementation and some associated functions adapted from SPLIB 
  * shortest path codes written by Cherkassky, Goldberg, and Radzik.
  */
-void SolveMST(nodeT **nodes, nodeT *source, nodeT *ground, 
-	      bucketT *bkts, short **mstcosts, signed char **residue, 
+void SolveMST(nodeT **nodes, nodeT *source, nodeT *ground,
+	      bucketT *bkts, int **mstcosts, signed char **residue,
 	      signed char **arcstatus, long nrow, long ncol){
 
   nodeT *from, *to, *pathfrom, *pathto;
@@ -2153,7 +2158,7 @@ void SolveMST(nodeT **nodes, nodeT *source, nodeT *ground,
       /* get cost of arc to new node (if arc on tree, cost is 0) */
       if(arcstatus[arcrow][arccol]<0){
 	arcdist=0;
-      }else if((arcdist=mstcosts[arcrow][arccol])==LARGESHORT){
+      }else if((arcdist=mstcosts[arcrow][arccol])==LARGEINT){
 	arcdist=VERYFAR;
       }
 
@@ -2199,11 +2204,11 @@ void SolveMST(nodeT **nodes, nodeT *source, nodeT *ground,
  * would also use much more stack memory.  This method is equivalent to 
  * walking the tree, so it should be nore more than a factor of 2 slower.
  */
-long DischargeTree(nodeT *source, short **mstcosts, short **flows,
-		   signed char **residue, signed char **arcstatus, 
+long DischargeTree(nodeT *source, int **mstcosts, int **flows,
+		   signed char **residue, signed char **arcstatus,
 		   nodeT **nodes, nodeT *ground, long nrow, long ncol){
 
-  long row, col=0, todir=0, arcrow, arccol, arcdir;
+  long row, col, todir, arcrow, arccol, arcdir;
   long arcnum, upperarcnum, ngroundarcs;
   nodeT *from, *to, *nextnode;
   nodesuppT **nodesupp;
@@ -2288,12 +2293,12 @@ long DischargeTree(nodeT *source, short **mstcosts, short **flows,
  * Given a flow, clips flow magnitudes to a computed limit, resets 
  * residues so sum of solution of network problem with new residues 
  * and solution of clipped problem give total solution.  Upper flow limit
- * is 2/3 the maximum flow on the network or the passed value maxflow, 
+ * is 2/3 the maximum flow on the network or the passed value maxflow,
  * whichever is greater.  Clipped flow arcs get costs of passed variable 
  * maxcost.  Residues should have been set to zero by DischargeTree().
  */
-signed char ClipFlow(signed char **residue, short **flows, 
-		     short **mstcosts, long nrow, long ncol, 
+signed char ClipFlow(signed char **residue, int **flows,
+		     int **mstcosts, long nrow, long ncol,
 		     long maxflow){
 
   long row, col, cliplimit, maxcol, excess, tempcharge, sign;
@@ -2301,7 +2306,7 @@ signed char ClipFlow(signed char **residue, short **flows,
 
 
   /* find maximum flow */
-  mostflow=Short2DRowColAbsMax(flows,nrow,ncol);
+  mostflow=Int2DRowColAbsMax(flows,nrow,ncol);
 
   /* if there is no flow greater than the maximum, return TRUE */
   if(mostflow<=maxflow){
@@ -2324,15 +2329,15 @@ signed char ClipFlow(signed char **residue, short **flows,
       maxcol=ncol-1;
     }
     for(col=0;col<maxcol;col++){
-      if(mstcosts[row][col]>maxcost && mstcosts[row][col]<LARGESHORT){
+      if(mstcosts[row][col]>maxcost && mstcosts[row][col]<LARGEINT){
 	maxcost=mstcosts[row][col];
       }
     }
   }
 
-  /* set the new maximum cost and make sure it doesn't overflow short int */
+  /* set the new maximum cost and make sure it doesn't overflow int int */
   maxcost+=INITMAXCOSTINCR;
-  if(maxcost>=LARGESHORT){
+  if(maxcost>=LARGEINT){
     fprintf(sp0,"WARNING: escaping ClipFlow loop to prevent cost overflow\n");
     return(TRUE);
   }
@@ -2406,7 +2411,7 @@ signed char ClipFlow(signed char **residue, short **flows,
  * Initializes the flow on a the network using minimum cost flow
  * algorithm.  
  */
-void MCFInitFlows(float **wrappedphase, short ***flowsptr, short **mstcosts, 
+void MCFInitFlows(float **wrappedphase, int ***flowsptr, int **mstcosts,
 		  long nrow, long ncol, long cs2scalefactor){
 
   signed char **residue;

@@ -50,6 +50,7 @@
 #include <float.h>
 #include <string.h>
 #include <ctype.h>
+#include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -57,8 +58,6 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <assert.h>
-
 #include "snaphu.h"
 
 /* for measuring time */
@@ -66,14 +65,14 @@
 /* definitions of types: node & arc */
 
 #define PRICE_MAX           1e30
-#define BIGGEST_FLOW        LARGESHORT
+#define BIGGEST_FLOW        LARGEINT
 
 #include "snaphu_cs2types.h"
 
 /* parser for getting  DIMACS format input and transforming the
    data to the internal representation */
 
-#include "snaphu_cs2parse.c"
+#include "snaphu_cs2parse.h"
 
 
 #define N_NODE( i ) ( ( (i) == NULL ) ? -1 : ( (i) - ndp + nmin ) )
@@ -316,7 +315,7 @@ long n_push      =0,
 long   n,                    /* number of nodes */
        m;                    /* number of arcs */
 
-short   *cap;                 /* array containig capacities */
+int   *cap;                 /* array containig capacities */
 
 node   *nodes,               /* array of nodes */
        *sentinel_node,       /* next after last */
@@ -370,10 +369,7 @@ node  d_node,                /* dummy node - for technical reasons */
 
 /************************************************ abnormal finish **********/
 
-static void err_end ( cc )
-
-int cc;
-
+static void err_end ( int cc )
 {
 fprintf ( sp0, "\ncs2 solver: Error %d ", cc );
 if(cc==ALLOCATION_FAULT){
@@ -396,16 +392,15 @@ exit(ABNORMAL_EXIT);
 
 /************************************************* initialization **********/
 
-static void cs_init ( n_p, m_p, nodes_p, arcs_p, f_sc, max_c, cap_p )
-
-long    n_p,        /* number of nodes */
-        m_p;        /* number of arcs */
-node    *nodes_p;   /* array of nodes */
-arc     *arcs_p;    /* array of arcs */
-long    f_sc;       /* scaling factor */
-double  max_c;      /* maximal cost */
-short    *cap_p;     /* array of capacities (changed to short by CWC) */
-
+static void cs_init(
+long    n_p,     /* number of nodes */
+long    m_p,     /* number of arcs */
+node   *nodes_p, /* array of nodes */
+arc    *arcs_p,  /* array of arcs */
+long    f_sc,    /* scaling factor */
+double  max_c,   /* maximal cost */
+int  *cap_p    /* array of capacities (changed to int by CWC) */
+                    )
 {
 node   *i;          /* current node */
 /*arc    *a;  */        /* current arc */
@@ -480,10 +475,7 @@ empty_push_bound = n * EMPTY_PUSH_COEF;
 
 /********************************************** up_node_scan *************/
 
-static void up_node_scan ( i )
-
-node *i;                      /* node for scanning */
-
+static void up_node_scan ( node * i )
 {
 node   *j;                     /* opposite node */
 arc    *a,                     /* ( i, j ) */
@@ -625,19 +617,15 @@ FOR_ALL_NODES_i
 
 /****************************************************** relabel *********/
 
-static int relabel ( i )
-
-register node *i;         /* node for relabelling */
-
+static int relabel ( node * i )
 {
 register arc    *a,       /* current arc from  i  */
                 *a_stop,  /* first arc from the next node */
-                *a_max;   /* arc  which provides maximum price */
+                *a_max = NULL;   /* arc  which provides maximum price */
 register double p_max,    /* current maximal price */
                 i_price,  /* price of node  i */
                 dp;       /* current arc partial residual cost */
 
-a_max = NULL;
 p_max = price_min;
 i_price = i -> price;
 
@@ -731,10 +719,7 @@ return ( 0 );
 /***************************************************** discharge *********/
 
 
-static void discharge ( i )
-
-register node *i;         /* node to be discharged */
-
+static void discharge ( node * i )
 {
 
 register arc  *a;       /* an arc from  i  */
@@ -1616,10 +1601,7 @@ return ( 0 );
 
 
 /*************************************************** finishup ***********/
-static void finishup ( obj_ad )
-
-double *obj_ad;       /* objective */
-
+static void finishup ( double *obj_ad )
 {
 arc   *a;            /* current arc */
 long  na;            /* corresponding position in capacity array */
@@ -1684,17 +1666,8 @@ for ( a = arcs, na = 0; a != sentinel_arc ; a ++, na ++ )
 
 /************************************************* cs2 - head program ***/
 
-static void  cs2 ( n_p, m_p, nodes_p, arcs_p, f_sc, max_c, cap_p, obj_ad)
-
-long    n_p,        /* number of nodes */
-        m_p;        /* number of arcs */
-node    *nodes_p;   /* array of nodes */
-arc     *arcs_p;    /* array of arcs */
-long    f_sc;       /* scaling factor */
-double  max_c;      /* maximal cost */
-short   *cap_p;     /* capacities (changed to short by CWC) */
-double  *obj_ad;    /* objective */
-
+static void  cs2 (long n_p, long m_p, node * nodes_p,
+                  arc * arcs_p, long f_sc, double max_c, int * cap_p, double * obj_ad)
 {
 
 int cc;             /* for storing return code */
@@ -1738,8 +1711,8 @@ finishup ( obj_ad );
 
 /* SolveCS2-- formerly main() */
 
-void SolveCS2(signed char **residue, short **mstcosts, long nrow, long ncol, 
-	      long cs2scalefactor, short ***flowsptr)
+void SolveCS2(signed char **residue, int **mstcosts, long nrow, long ncol, 
+	      long cs2scalefactor, int ***flowsptr)
 {
 
   /*  double t; */
@@ -1754,10 +1727,10 @@ void SolveCS2(signed char **residue, short **mstcosts, long nrow, long ncol,
   long f_sc;
 
   double cost,  c_max;
-  short *cap;  /* cap changed to short by CWC */
+  int *cap = NULL;  /* cap changed to int by CWC */
 
-  short **rowcost, **colcost;
-  short **rowflow, **colflow;
+  int **rowcost, **colcost;
+  int **rowflow, **colflow;
   
   /* number of rows, cols, in residue network */
   nNrow=nrow-1;
@@ -1784,8 +1757,8 @@ void SolveCS2(signed char **residue, short **mstcosts, long nrow, long ncol,
   /* parse flow solution and place into flow arrays */
   
   /* get memory for flow arrays */
-  (*flowsptr)=(short **)Get2DRowColZeroMem(nrow,ncol,
-					   sizeof(short *),sizeof(short));
+  (*flowsptr)=(int **)Get2DRowColZeroMem(nrow,ncol,
+					   sizeof(int *),sizeof(int));
   rowflow=(*flowsptr);
   colflow=&((*flowsptr)[nrow-1]);
 
@@ -1804,14 +1777,20 @@ void SolveCS2(signed char **residue, short **mstcosts, long nrow, long ncol,
 	to=N_NODE( a -> head );
 	flow=cap[ N_ARC (a) ] - ( a -> r_cap );
       
-	if(flow>LARGESHORT || flow<-LARGESHORT){
-	  fprintf(sp0,"Flow will overflow short data type\nAbort\n");
+	if(flow>LARGEINT || flow<-LARGEINT){
+	  fprintf(sp0,"Flow will overflow int data type\nAbort\n");
 	  exit(ABNORMAL_EXIT);
 	}
 
 	if(from==(to+1)){    
 	  num=from+(int )((from-1)/nNrow);
-	  colflow[(num-1) % (nNrow+1)][(int )(num-1)/(nNrow+1)]-=flow;
+	  int r = (num - 1) % (nNrow + 1);
+	  int c = (int)(num - 1) / (nNrow + 1);
+	  if (r >= nrow - 1 || c >= ncol)
+		  printf("Invalid indices r = %d, c = %d, num = %d, from = %lu",
+		  r, c, num, (unsigned long)from);
+	  else
+		  colflow[r][c]-=flow;
 	}else if(from==(to-1)){
 	  num=from+(int )((from-1)/nNrow)+1;
 	  colflow[(num-1) % (nNrow+1)][(int )(num-1)/(nNrow+1)]+=flow;

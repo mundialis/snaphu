@@ -18,13 +18,16 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/resource.h>
+
+#ifdef __GNUC__
+#  include <unistd.h>
+#  include <sys/stat.h>
+#else
+#  include <direct.h>
+#  include <windows.h>
+#  define mkdir _mkdir
+#  define getpid GetCurrentProcessId
+#endif
 
 #include "snaphu.h"
 
@@ -129,7 +132,7 @@ void SetDefaults(infileT *infiles, outfileT *outfiles, paramT *params){
   params->dzlayfactor=DEF_DZLAYFACTOR;
   params->layconst=DEF_LAYCONST;
   params->layfalloffconst=DEF_LAYFALLOFFCONST;
-  params->sigsqshortmin=DEF_SIGSQSHORTMIN;
+  params->sigsqintmin=DEF_SIGSQINTMIN;
   params->sigsqlayfactor=DEF_SIGSQLAYFACTOR;
 
   /* deformation mode parameters */
@@ -158,7 +161,7 @@ void SetDefaults(infileT *infiles, outfileT *outfiles, paramT *params){
   params->srcrow=DEF_SRCROW;
   params->srccol=DEF_SRCCOL;
   params->p=DEF_P;
-  params->nshortcycle=DEF_NSHORTCYCLE;
+  params->nintcycle=DEF_NINTCYCLE;
   params->maxnewnodeconst=DEF_MAXNEWNODECONST;
   params->maxcyclefraction=DEF_MAXCYCLEFRACTION;
   params->sourcemode=DEF_SOURCEMODE;
@@ -195,7 +198,7 @@ void SetDefaults(infileT *infiles, outfileT *outfiles, paramT *params){
  * -----------------------
  * Parses command line inputs passed to main().
  */
-void ProcessArgs(int argc, char *argv[], infileT *infiles, outfileT *outfiles,
+void ProcessArgs(int argc, const char **argv, infileT *infiles, outfileT *outfiles,
 		 long *linelenptr, paramT *params){
 
   long i,j;
@@ -671,8 +674,8 @@ void CheckParams(infileT *infiles, outfileT *outfiles,
     fprintf(sp0,"parameter layfalloffconst must be nonnegative\n");
     exit(ABNORMAL_EXIT);
   }
-  if(params->sigsqshortmin<=0){
-    fprintf(sp0,"parameter sigsqshortmin must be positive\n");
+  if(params->sigsqintmin<=0){
+    fprintf(sp0,"parameter sigsqintmin must be positive\n");
     exit(ABNORMAL_EXIT);
   }
   if(params->sigsqlayfactor<0){
@@ -738,8 +741,8 @@ void CheckParams(infileT *infiles, outfileT *outfiles,
     fprintf(sp0,"initdzstep must be positive\n");
     exit(ABNORMAL_EXIT);
   }
-  if(params->maxcost>POSSHORTRANGE || params->maxcost<=0){
-    fprintf(sp0,"maxcost must be positive and within range or short int\n");
+  if(params->maxcost>POSINTRANGE || params->maxcost<=0){
+    fprintf(sp0,"maxcost must be positive and within range or int int\n");
     exit(ABNORMAL_EXIT);
   }
   if(params->costscale<=0){
@@ -750,14 +753,14 @@ void CheckParams(infileT *infiles, outfileT *outfiles,
     fprintf(sp0,"Lp-norm parameter p should be nonnegative\n");
     exit(ABNORMAL_EXIT);
   }
-  if((params->costmode==TOPO && params->maxflow*params->nshortcycle)
-     >POSSHORTRANGE){
-    fprintf(sp0,"maxflow exceeds range of short int for given nshortcycle\n");
+  if((params->costmode==TOPO && params->maxflow*params->nintcycle)
+     >POSINTRANGE){
+    fprintf(sp0,"maxflow exceeds range of int int for given nintcycle\n");
     exit(ABNORMAL_EXIT);
   }
-  if(params->costmode==DEFO && ceil(params->defomax*params->nshortcycle)
-     >POSSHORTRANGE){
-    fprintf(sp0,"defomax exceeds range of short int for given nshortcycle\n");
+  if(params->costmode==DEFO && ceil(params->defomax*params->nintcycle)
+     >POSINTRANGE){
+    fprintf(sp0,"defomax exceeds range of int int for given nintcycle\n");
     exit(ABNORMAL_EXIT);
   }
   if(params->maxnewnodeconst<=0 || params->maxnewnodeconst>1){
@@ -778,7 +781,7 @@ void CheckParams(infileT *infiles, outfileT *outfiles,
 				   *nlines/(double )params->ntilerow
 				   *linelen/(double )params->ntilecol);
   }
-  if(params->initmaxflow==AUTOCALCSTATMAX
+  if(params->initmaxflow==AUTOCALCSTATMAX 
      && !(params->ntilerow==1 && params->ntilecol==1)){
     fprintf(sp0,"initial maximum flow cannot be calculated automatically in "
 	    "tile mode\n");
@@ -963,7 +966,7 @@ void CheckParams(infileT *infiles, outfileT *outfiles,
  * --------------------------
  * Read in parameter values from a file, overriding existing parameters.
  */
-void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
+void ReadConfigFile(const char *conffile, infileT *infiles, outfileT *outfiles,
 		    long *linelenptr, paramT *params){
 
   long nlines, nparams, nfields;
@@ -1207,8 +1210,8 @@ void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
 	badparam=StringToDouble(str2,&(params->layconst));
       }else if(!strcmp(str1,"LAYFALLOFFCONST")){
 	badparam=StringToDouble(str2,&(params->layfalloffconst));
-      }else if(!strcmp(str1,"SIGSQSHORTMIN")){
-	badparam=StringToLong(str2,&(params->sigsqshortmin));
+      }else if(!strcmp(str1,"SIGSQINTMIN")){
+	badparam=StringToLong(str2,&(params->sigsqintmin));
       }else if(!strcmp(str1,"SIGSQLAYFACTOR")){
 	badparam=StringToDouble(str2,&(params->sigsqlayfactor));
       }else if(!strcmp(str1,"DEFOAZDZFACTOR")){
@@ -1294,8 +1297,8 @@ void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
 	badparam=StringToLong(str2,&(params->conncompthresh));
       }else if(!strcmp(str1,"MAXNCOMPS")){
 	badparam=StringToLong(str2,&(params->maxncomps));
-      }else if(!strcmp(str1,"NSHORTCYCLE")){
-	badparam=StringToLong(str2,&(params->nshortcycle));
+      }else if(!strcmp(str1,"NINTCYCLE")){
+	badparam=StringToLong(str2,&(params->nintcycle));
       }else if(!strcmp(str1,"MAXNEWNODECONST")){
 	badparam=StringToDouble(str2,&(params->maxnewnodeconst));
       }else if(!strcmp(str1,"MAXNFLOWCYCLES")){
@@ -1382,7 +1385,11 @@ void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
 	  infiles->estfileformat=ALT_LINE_DATA;
 	}else if(!strcmp(str2,"ALT_SAMPLE_DATA")){
 	  infiles->estfileformat=ALT_SAMPLE_DATA;
-	}else if(!strcmp(str2,"FLOAT_DATA")){
+	}
+#ifdef __GNUC__
+	else //MSVC reached its compiler limit (blocks nested too deeply)
+#endif
+	if(!strcmp(str2,"FLOAT_DATA")){
 	  infiles->estfileformat=FLOAT_DATA;
 	}else{
 	  badparam=TRUE;
@@ -1393,7 +1400,11 @@ void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
 	StrNCopy(outfiles->flowfile,str2,MAXSTRLEN);
       }else if(!strcmp(str1,"EIFILE")){
 	StrNCopy(outfiles->eifile,str2,MAXSTRLEN);
-      }else if(!strcmp(str1,"ROWCOSTFILE")){
+      }
+#ifdef __GNUC__
+	  else 
+#endif
+    if(!strcmp(str1,"ROWCOSTFILE")){
 	StrNCopy(outfiles->rowcostfile,str2,MAXSTRLEN);
       }else if(!strcmp(str1,"COLCOSTFILE")){
 	StrNCopy(outfiles->colcostfile,str2,MAXSTRLEN);
@@ -1411,10 +1422,6 @@ void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
 	StrNCopy(outfiles->conncompfile,str2,MAXSTRLEN);
       }else if(!strcmp(str1,"REGROWCONNCOMPS")){
 	badparam=SetBooleanSignedChar(&(params->regrowconncomps),str2);
-      }else{
-	fprintf(sp0,"unrecognized configuration parameter '%s' (%s:%ld)\n",
-		str1,conffile,nlines);
-	exit(ABNORMAL_EXIT);
       }
 
       /* give an error if we had trouble interpreting the line */
@@ -1451,7 +1458,7 @@ void ReadConfigFile(char *conffile, infileT *infiles, outfileT *outfiles,
  * information.  The log file is in a format compatible to be used as
  * a configuration file.
  */
-void WriteConfigLogFile(int argc, char *argv[], infileT *infiles,
+void WriteConfigLogFile(int argc, const char **argv, infileT *infiles,
 			outfileT *outfiles, long linelen, paramT *params){
 
   FILE *fp;
@@ -1605,7 +1612,7 @@ void WriteConfigLogFile(int argc, char *argv[], infileT *infiles,
     fprintf(fp,"DZLAYFACTOR  %.8f\n",params->dzlayfactor);
     fprintf(fp,"LAYCONST  %.8f\n",params->layconst);
     fprintf(fp,"LAYFALLOFFCONST  %.8f\n",params->layfalloffconst);
-    fprintf(fp,"SIGSQSHORTMIN  %ld\n",params->sigsqshortmin);
+    fprintf(fp,"SIGSQINTMIN  %ld\n",params->sigsqintmin);
     fprintf(fp,"SIGSQLAYFACTOR  %.8f\n",params->sigsqlayfactor);
 
     /* deformation mode paramters */
@@ -1632,7 +1639,7 @@ void WriteConfigLogFile(int argc, char *argv[], infileT *infiles,
     fprintf(fp,"COSTSCALE  %.8f\n",params->costscale);
     fprintf(fp,"COSTSCALEAMBIGHT  %.8f\n",params->costscaleambight);
     fprintf(fp,"DNOMINCANGLE  %.8f\n",params->dnomincangle);
-    fprintf(fp,"NSHORTCYCLE  %ld\n",params->nshortcycle);
+    fprintf(fp,"NINTCYCLE  %ld\n",params->nintcycle);
     fprintf(fp,"MAXNEWNODECONST  %.8f\n",params->maxnewnodeconst);
     if(params->maxnflowcycles==USEMAXCYCLEFRACTION){
       fprintf(fp,"MAXCYCLEFRACTION  %.8f\n",params->maxcyclefraction);
@@ -1709,7 +1716,7 @@ void WriteConfigLogFile(int argc, char *argv[], infileT *infiles,
  * Writes a line to the log file stream for the given keyword/value
  * pair.
  */
-void LogStringParam(FILE *fp, char *key, char *value){
+void LogStringParam(FILE *fp, const char *key, const char *value){
 
   /* see if we were passed a zero length value string */
   if(strlen(value)){
@@ -1726,7 +1733,7 @@ void LogStringParam(FILE *fp, char *key, char *value){
  * Writes a line to the log file stream for the given keyword/bool
  * pair.
  */
-void LogBoolParam(FILE *fp, char *key, signed char boolvalue){
+void LogBoolParam(FILE *fp, const char *key, signed char boolvalue){
 
   if(boolvalue){
     fprintf(fp,"%s  TRUE\n",key);
@@ -1740,7 +1747,7 @@ void LogBoolParam(FILE *fp, char *key, signed char boolvalue){
  * Writes a line to the log file stream for the given keyword/
  * file format pair.
  */
-void LogFileFormat(FILE *fp, char *key, signed char fileformat){
+void LogFileFormat(FILE *fp, const char *key, signed char fileformat){
 
   if(fileformat==COMPLEX_DATA){
     fprintf(fp,"%s  COMPLEX_DATA\n",key);
@@ -1765,7 +1772,7 @@ long GetNLines(infileT *infiles, long linelen){
   long filesize, datasize;
 
   /* get size of input file in rows and columns */
-  if((fp=fopen(infiles->infile,"r"))==NULL){
+  if((fp=fopen(infiles->infile,"rb"))==NULL){
     fprintf(sp0,"can't open file %s\n",infiles->infile);
     exit(ABNORMAL_EXIT);
   }
@@ -1792,7 +1799,7 @@ long GetNLines(infileT *infiles, long linelen){
  * Writes the unwrapped phase to the output file specified, in the
  * format given in the parameter structure.
  */
-void WriteOutputFile(float **mag, float **unwrappedphase, char *outfile,
+void WriteOutputFile(float **mag, float **unwrappedphase, const char *outfile,
 		     outfileT *outfiles, long nrow, long ncol){
 
   if(outfiles->outfileformat==ALT_LINE_DATA){
@@ -1818,19 +1825,19 @@ void WriteOutputFile(float **mag, float **unwrappedphase, char *outfile,
  * is written into the string realoutfile, for which at least
  * MAXSTRLEN bytes should already be allocated.
  */
-FILE *OpenOutputFile(char *outfile, char *realoutfile){
+FILE *OpenOutputFile(const char *outfile, char *realoutfile){
 
   char path[MAXSTRLEN], basename[MAXSTRLEN], dumpfile[MAXSTRLEN];
   FILE *fp;
 
-  if((fp=fopen(outfile,"w"))==NULL){
+  if((fp=fopen(outfile,"wb"))==NULL){
 
     /* if we can't write to the out file, get the file name from the path */
     /* and dump to the default path */
     ParseFilename(outfile,path,basename);
     StrNCopy(dumpfile,DUMP_PATH,MAXSTRLEN);
     strcat(dumpfile,basename);
-    if((fp=fopen(dumpfile,"w"))!=NULL){
+    if((fp=fopen(dumpfile,"wb"))!=NULL){
       fprintf(sp0,"WARNING: Can't write to file %s.  Dumping to file %s\n",
 	     outfile,dumpfile);
       StrNCopy(realoutfile,dumpfile,MAXSTRLEN);
@@ -1854,7 +1861,7 @@ FILE *OpenOutputFile(char *outfile, char *realoutfile){
  * is written, then a full line of phase data.  Dumps the file to a
  * default directory if the file name/path passed in cannot be used.
  */
-void WriteAltLineFile(float **mag, float **phase, char *outfile,
+void WriteAltLineFile(float **mag, float **phase, const char *outfile,
 		      long nrow, long ncol){
 
   int row;
@@ -1881,7 +1888,7 @@ void WriteAltLineFile(float **mag, float **phase, char *outfile,
  * array.  Dumps the file to a default directory if the file name/path
  * passed in cannot be used.
  */
-void WriteAltSampFile(float **arr1, float **arr2, char *outfile,
+void WriteAltSampFile(float **arr1, float **arr2, const char *outfile,
 		      long nrow, long ncol){
 
   long row, col;
@@ -1889,7 +1896,7 @@ void WriteAltSampFile(float **arr1, float **arr2, char *outfile,
   float *outline;
   char realoutfile[MAXSTRLEN];
 
-  outline=MAlloc(2*ncol*sizeof(float));
+  outline=(float*)MAlloc(2*ncol*sizeof(float));
   fp=OpenOutputFile(outfile,realoutfile);
   for(row=0; row<nrow; row++){
     for(col=0;col<ncol;col++){
@@ -1912,7 +1919,7 @@ void WriteAltSampFile(float **arr1, float **arr2, char *outfile,
  * have the number of bytes specified by size (use sizeof() when
  * calling this function.
  */
-void Write2DArray(void **array, char *filename, long nrow, long ncol,
+void Write2DArray(void **array, const char *filename, long nrow, long ncol,
 		  size_t size){
 
   int row;
@@ -1938,7 +1945,7 @@ void Write2DArray(void **array, char *filename, long nrow, long ncol,
  * calling this function.  The format of the array is nrow-1 rows
  * of ncol elements, followed by nrow rows of ncol-1 elements each.
  */
-void Write2DRowColArray(void **array, char *filename, long nrow,
+void Write2DRowColArray(void **array, const char *filename, long nrow,
 			long ncol, size_t size){
 
   int row;
@@ -1969,12 +1976,12 @@ void Write2DRowColArray(void **array, char *filename, long nrow,
  * Reads the input file specified on the command line.
  */
 void ReadInputFile(infileT *infiles, float ***magptr, float ***wrappedphaseptr,
- 		   short ***flowsptr, long linelen, long nlines,
+ 		   int ***flowsptr, long linelen, long nlines,
 		   paramT *params, tileparamT *tileparams){
 
   long row, col, nrow, ncol;
   float **mag, **wrappedphase, **unwrappedphase;
-  short **flows;
+  int **flows;
 
   /* initialize */
   mag=NULL;
@@ -1985,7 +1992,7 @@ void ReadInputFile(infileT *infiles, float ***magptr, float ***wrappedphaseptr,
   ncol=tileparams->ncol;
 
   /* check data size */
-  if(tileparams->ncol>LARGESHORT || tileparams->nrow>LARGESHORT){
+  if(tileparams->ncol>LARGEINT || tileparams->nrow>LARGEINT){
     fprintf(sp0,"one or more interferogram dimensions too large\n");
     exit(ABNORMAL_EXIT);
   }
@@ -2169,13 +2176,13 @@ void ReadUnwrappedEstimateFile(float ***unwrappedestptr, infileT *infiles,
 
 /* function: ReadWeightsFile()
  * ---------------------------
- * Read in weights form rowcol format file of short ints.
+ * Read in weights form rowcol format file of int ints.
  */
-void ReadWeightsFile(short ***weightsptr,char *weightfile,
+void ReadWeightsFile(int ***weightsptr,const char *weightfile,
 		     long linelen, long nlines, tileparamT *tileparams){
 
   long row, col, nrow, ncol;
-  short **rowweight, **colweight;
+  int **rowweight, **colweight;
   signed char printwarning;
 
 
@@ -2185,7 +2192,7 @@ void ReadWeightsFile(short ***weightsptr,char *weightfile,
   if(strlen(weightfile)){
     fprintf(sp1,"Reading weights from file %s\n",weightfile);
     Read2DRowColFile((void ***)weightsptr,weightfile,linelen,nlines,
-		     tileparams,sizeof(short));
+		     tileparams,sizeof(int));
     rowweight=*weightsptr;
     colweight=&(*weightsptr)[nrow-1];
     printwarning=FALSE;
@@ -2210,12 +2217,12 @@ void ReadWeightsFile(short ***weightsptr,char *weightfile,
     }
   }else{
     fprintf(sp1,"No weight file specified.  Assuming uniform weights\n");
-    *weightsptr=(short **)Get2DRowColMem(nrow,ncol,
-					 sizeof(short *),sizeof(short));
+    *weightsptr=(int **)Get2DRowColMem(nrow,ncol,
+					 sizeof(int *),sizeof(int));
     rowweight=*weightsptr;
     colweight=&(*weightsptr)[nrow-1];
-    Set2DShortArray(rowweight,nrow-1,ncol,DEF_WEIGHT);
-    Set2DShortArray(colweight,nrow,ncol-1,DEF_WEIGHT);
+    Set2DIntArray(rowweight,nrow-1,ncol,DEF_WEIGHT);
+    Set2DIntArray(colweight,nrow,ncol-1,DEF_WEIGHT);
   }
 }
 
@@ -2370,14 +2377,14 @@ void ReadCorrelation(float ***corrptr, infileT *infiles,
  * ncol refers to the number of complex elements in one line of
  * data.
  */
-void ReadAltLineFile(float ***mag, float ***phase, char *alfile,
+void ReadAltLineFile(float ***mag, float ***phase, const char *alfile,
 		     long linelen, long nlines, tileparamT *tileparams){
 
   FILE *fp;
   long filesize,row,nrow,ncol,padlen;
 
   /* open the file */
-  if((fp=fopen(alfile,"r"))==NULL){
+  if((fp=fopen(alfile,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",alfile);
     exit(ABNORMAL_EXIT);
   }
@@ -2429,16 +2436,16 @@ void ReadAltLineFile(float ***mag, float ***phase, char *alfile,
  * data.  File should have one line of magnitude data, one line
  * of phase data, another line of magnitude data, etc.
  * ncol refers to the number of complex elements in one line of
- * data.
+ * data. 
  */
-void ReadAltLineFilePhase(float ***phase, char *alfile,
+void ReadAltLineFilePhase(float ***phase, const char *alfile,
 			  long linelen, long nlines, tileparamT *tileparams){
 
   FILE *fp;
   long filesize,row,nrow,ncol,padlen;
 
   /* open the file */
-  if((fp=fopen(alfile,"r"))==NULL){
+  if((fp=fopen(alfile,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",alfile);
     exit(ABNORMAL_EXIT);
   }
@@ -2483,7 +2490,7 @@ void ReadAltLineFilePhase(float ***phase, char *alfile,
  * floats per line).  Ensures that phase values are in the range
  * [0,2pi).
  */
-void ReadComplexFile(float ***mag, float ***phase, char *rifile,
+void ReadComplexFile(float ***mag, float ***phase, const char *rifile,
 		     long linelen, long nlines, tileparamT *tileparams){
 
   FILE *fp;
@@ -2491,7 +2498,7 @@ void ReadComplexFile(float ***mag, float ***phase, char *rifile,
   float *inpline;
 
   /* open the file */
-  if((fp=fopen(rifile,"r"))==NULL){
+  if((fp=fopen(rifile,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",rifile);
     exit(ABNORMAL_EXIT);
   }
@@ -2550,14 +2557,14 @@ void ReadComplexFile(float ***mag, float ***phase, char *rifile,
  * Reads file of real data of size elsize.  Assumes the native byte order
  * of the platform.
  */
-void Read2DArray(void ***arr, char *infile, long linelen, long nlines,
+void Read2DArray(void ***arr, const char *infile, long linelen, long nlines,
 		 tileparamT *tileparams, size_t elptrsize, size_t elsize){
 
   FILE *fp;
   long filesize,row,nrow,ncol,padlen;
 
   /* open the file */
-  if((fp=fopen(infile,"r"))==NULL){
+  if((fp=fopen(infile,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",infile);
     exit(ABNORMAL_EXIT);
   }
@@ -2571,7 +2578,7 @@ void Read2DArray(void ***arr, char *infile, long linelen, long nlines,
     exit(ABNORMAL_EXIT);
   }
   fseek(fp,0,SEEK_SET);
-
+  int nDebug = ftell(fp);
   /* get memory */
   nrow=tileparams->nrow;
   ncol=tileparams->ncol;
@@ -2584,7 +2591,8 @@ void Read2DArray(void ***arr, char *infile, long linelen, long nlines,
 	*elsize,SEEK_CUR);
   padlen=(linelen-ncol)*elsize;
   for(row=0; row<nrow; row++){
-    if(fread((*arr)[row],elsize,ncol,fp)!=ncol){
+	int nread = fread((*arr)[row], elsize, ncol, fp);
+    if(nread != ncol){
       fprintf(sp0,"Error while reading from file %s\nAbort\n",infile);
       exit(ABNORMAL_EXIT);
     }
@@ -2602,7 +2610,7 @@ void Read2DArray(void ***arr, char *infile, long linelen, long nlines,
  * ncol is the number of samples in each image (note the number of
  * floats per line in the specified file).
  */
-void ReadAltSampFile(float ***arr1, float ***arr2, char *infile,
+void ReadAltSampFile(float ***arr1, float ***arr2, const char *infile,
 		     long linelen, long nlines, tileparamT *tileparams){
 
   FILE *fp;
@@ -2610,7 +2618,7 @@ void ReadAltSampFile(float ***arr1, float ***arr2, char *infile,
   float *inpline;
 
   /* open the file */
-  if((fp=fopen(infile,"r"))==NULL){
+  if((fp=fopen(infile,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",infile);
     exit(ABNORMAL_EXIT);
   }
@@ -2664,14 +2672,14 @@ void ReadAltSampFile(float ***arr1, float ***arr2, char *infile,
  * followed by the column array (size nrow x ncol-1).  Both arrays
  * are placed into the passed array as they were in the file.
  */
-void Read2DRowColFile(void ***arr, char *filename, long linelen, long nlines,
+void Read2DRowColFile(void ***arr, const char *filename, long linelen, long nlines,
 		      tileparamT *tileparams, size_t size){
 
   FILE *fp;
   long row, nel, nrow, ncol, padlen, filelen;
 
   /* open the file */
-  if((fp=fopen(filename,"r"))==NULL){
+  if((fp=fopen(filename,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",filename);
     exit(ABNORMAL_EXIT);
   }
@@ -2728,14 +2736,14 @@ void Read2DRowColFile(void ***arr, char *filename, long linelen, long nlines,
  * equivalent rows in the orginal pixel file (whose arcs are represented
  * in the RowCol file).
  */
-void Read2DRowColFileRows(void ***arr, char *filename, long linelen,
+void Read2DRowColFileRows(void ***arr, const char *filename, long linelen,
 			  long nlines, tileparamT *tileparams, size_t size){
 
   FILE *fp;
   long row, nel, nrow, ncol, padlen, filelen;
 
   /* open the file */
-  if((fp=fopen(filename,"r"))==NULL){
+  if((fp=fopen(filename,"rb"))==NULL){
     fprintf(sp0,"Can't open file %s\nAbort\n",filename);
     exit(ABNORMAL_EXIT);
   }
@@ -2825,7 +2833,7 @@ void SetStreamPointers(void){
 
   fflush(NULL);
   if((sp0=DEF_ERRORSTREAM)==NULL){
-    if((sp0=fopen(NULLFILE,"w"))==NULL){
+    if((sp0=fopen(NULLFILE,"wb"))==NULL){
       fprintf(sp0,"unable to open null file %s\n",NULLFILE);
       exit(ABNORMAL_EXIT);
     }
@@ -2923,10 +2931,10 @@ void DumpIncrCostFiles(incrcostT **incrcosts, long iincrcostfile,
   long row, col, maxcol;
   char incrcostfile[MAXSTRLEN];
   char tempstr[MAXSTRLEN];
-  short **tempcosts;
+  int **tempcosts;
 
   /* get memory for tempcosts */
-  tempcosts=(short **)Get2DRowColMem(nrow,ncol,sizeof(short *),sizeof(short));
+  tempcosts=(int **)Get2DRowColMem(nrow,ncol,sizeof(int *),sizeof(int));
 
   /* create the file names and dump the files */
   /* snprintf() is more elegant, but its unavailable on some machines */
@@ -2944,7 +2952,7 @@ void DumpIncrCostFiles(incrcostT **incrcosts, long iincrcostfile,
   sprintf(tempstr,".%ld_%ld",iincrcostfile,nflow);
   strncat(incrcostfile,tempstr,MAXSTRLEN-strlen(incrcostfile)-1);
   Write2DRowColArray((void **)tempcosts,incrcostfile,
-		     nrow,ncol,sizeof(short));
+		     nrow,ncol,sizeof(int));
   for(row=0;row<2*nrow-1;row++){
     if(row<nrow-1){
       maxcol=ncol;
@@ -2959,7 +2967,7 @@ void DumpIncrCostFiles(incrcostT **incrcosts, long iincrcostfile,
   sprintf(tempstr,".%ld_%ld",iincrcostfile,nflow);
   strncat(incrcostfile,tempstr,MAXSTRLEN-strlen(incrcostfile)-1);
   Write2DRowColArray((void **)tempcosts,incrcostfile,
-		     nrow,ncol,sizeof(short));
+		     nrow,ncol,sizeof(int));
 
   /* free memory */
   Free2DArray((void **)tempcosts,2*nrow-1);
@@ -2997,7 +3005,7 @@ void MakeTileDir(paramT *params, outfileT *outfiles){
  * should be no more than MAXSTRLEN characters.  The output path
  * has a trailing "/" character.
  */
-void ParseFilename(char *filename, char *path, char *basename){
+void ParseFilename(const char *filename, char *path, char *basename){
 
   char tempstring[MAXSTRLEN];
   char *tempouttok;

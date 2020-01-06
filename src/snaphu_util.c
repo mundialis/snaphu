@@ -16,14 +16,16 @@
 #include <float.h>
 #include <string.h>
 #include <ctype.h>
-#include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/resource.h>
+
+#ifdef __GNUC__
+#  include <time.h>
+#  include <sys/stat.h>
+#  include <sys/types.h>
+#  include <sys/wait.h>
+#  include <sys/resource.h>
+#endif
 
 #include "snaphu.h"
 
@@ -33,7 +35,7 @@
  * Returns TRUE if the string input is any of TRUE, True, true, 1,
  * y, Y, yes, YES
  */
-int IsTrue(char *str){
+int IsTrue(const char *str){
 
   if(!strcmp(str,"TRUE") || !strcmp(str,"true") || !strcmp(str,"True")
      || !strcmp(str,"1") || !strcmp(str,"y") || !strcmp(str,"Y")
@@ -50,7 +52,7 @@ int IsTrue(char *str){
  * Returns FALSE if the string input is any of FALSE, False, false,
  * 0, n, N, no, NO
  */
-int IsFalse(char *str){
+int IsFalse(const char *str){
 
   if(!strcmp(str,"FALSE") || !strcmp(str,"false") || !strcmp(str,"False")
      || !strcmp(str,"0") || !strcmp(str,"n") || !strcmp(str,"N")
@@ -67,7 +69,7 @@ int IsFalse(char *str){
  * Sets the value of a signed character based on the string argument passed.
  * Returns TRUE if the string was not a valid value, FALSE otherwise.
  */
-signed char SetBooleanSignedChar(signed char *boolptr, char *str){
+signed char SetBooleanSignedChar(signed char *boolptr, const char *str){
 
   if(IsTrue(str)){
     (*boolptr)=TRUE;
@@ -231,20 +233,20 @@ void CycleResidue(float **phase, signed char **residue,
  * Calculates flow based on unwrapped phase data in a 2D array.
  * Allocates memory for row and column flow arrays.
  */
-void CalcFlow(float **phase, short ***flowsptr, long nrow, long ncol){
+void CalcFlow(float **phase, int ***flowsptr, long nrow, long ncol){
 
   long row, col;
 
   /* get memory for flow arrays */
   if((*flowsptr)==NULL){
-    (*flowsptr)=(short **)Get2DRowColMem(nrow,ncol,
-					 sizeof(short *),sizeof(short));
+    (*flowsptr)=(int **)Get2DRowColMem(nrow,ncol,
+					 sizeof(int *),sizeof(int));
   }
 
   /* get row flows (vertical phase differences) */
   for(row=0;row<nrow-1;row++){
     for(col=0;col<ncol;col++){
-      (*flowsptr)[row][col]=(short)LRound((phase[row][col]-phase[row+1][col])
+      (*flowsptr)[row][col]=(int)LRound((phase[row][col]-phase[row+1][col])
 					 /TWOPI);
     }
   }
@@ -252,7 +254,7 @@ void CalcFlow(float **phase, short ***flowsptr, long nrow, long ncol){
   /* get col flows (horizontal phase differences) */
   for(row=0;row<nrow;row++){
     for(col=0;col<ncol-1;col++){
-      (*flowsptr)[nrow-1+row][col]=(short)LRound((phase[row][col+1]
+      (*flowsptr)[nrow-1+row][col]=(int)LRound((phase[row][col+1]
 						  -phase[row][col])
 						 /TWOPI);
     }
@@ -268,11 +270,11 @@ void CalcFlow(float **phase, short ***flowsptr, long nrow, long ncol){
  * rowflow should have size N-1xM and colflow size NxM-1 where the
  * phase fields are NxM.  Output is saved to a file.
  */
-void IntegratePhase(float **psi, float **phi, short **flows,
+void IntegratePhase(float **psi, float **phi, int **flows,
 		    long nrow, long ncol){
 
   long row, col;
-  short **rowflow, **colflow;
+  int **rowflow, **colflow;
   rowflow=flows;
   colflow=&(flows[nrow-1]);
 
@@ -301,9 +303,9 @@ void IntegratePhase(float **psi, float **phi, short **flows,
  * Given an unwrapped phase array, parse the data and find the flows.
  * Assumes only integer numbers of cycles have been added to get the
  * unwrapped phase from the wrapped pase.  Gets memory and writes
- * wrapped phase to passed pointer.  Assumes flows fit into short ints.
+ * wrapped phase to passed pointer.  Assumes flows fit into int ints.
  */
-float **ExtractFlow(float **unwrappedphase, short ***flowsptr,
+float **ExtractFlow(float **unwrappedphase, int ***flowsptr,
 		    long nrow, long ncol){
 
   long row, col;
@@ -355,7 +357,7 @@ void FlipPhaseArraySign(float **arr, paramT *params, long nrow, long ncol){
  * Flips the sign of all values in a row-by-column array if the flip
  * flip flag is set.  Otherwise, does nothing.
  */
-void FlipFlowArraySign(short **arr, paramT *params, long nrow, long ncol){
+void FlipFlowArraySign(int **arr, paramT *params, long nrow, long ncol){
 
   long row, col, maxcol;
 
@@ -388,7 +390,7 @@ void **Get2DMem(int nrow, int ncol, int psize, size_t size){
   int row;
   void **array;
 
-  if((array=malloc(nrow*psize))==NULL){
+  if((array=(void**)malloc(nrow*psize))==NULL){
     fprintf(sp0,"Out of memory\n");
     exit(ABNORMAL_EXIT);
   }
@@ -413,18 +415,18 @@ void **Get2DRowColMem(long nrow, long ncol, int psize, size_t size){
   long row;
   void **array;
 
-  if((array=malloc((2*nrow-1)*psize))==NULL){
+  if((array=(void**)malloc((2*nrow)*psize))==NULL){
     fprintf(sp0,"Out of memory\n");
     exit(ABNORMAL_EXIT);
   }
-  for(row=0; row<nrow-1; row++){
+  for(row=0; row<nrow; row++){
     if((array[row]=malloc(ncol*size))==NULL){
       fprintf(sp0,"Out of memory\n");
       exit(ABNORMAL_EXIT);
     }
   }
-  for(row=nrow-1; row<2*nrow-1; row++){
-    if((array[row]=malloc((ncol-1)*size))==NULL){
+  for(row=nrow-1; row<2*nrow; row++){
+    if((array[row]=malloc((ncol)*size))==NULL){
       fprintf(sp0,"Out of memory\n");
       exit(ABNORMAL_EXIT);
     }
@@ -444,18 +446,18 @@ void **Get2DRowColZeroMem(long nrow, long ncol, int psize, size_t size){
   long row;
   void **array;
 
-  if((array=malloc((2*nrow-1)*psize))==NULL){
+  if((array=(void**)malloc((2*nrow)*psize))==NULL){
     fprintf(sp0,"Out of memory\n");
     exit(ABNORMAL_EXIT);
   }
-  for(row=0; row<nrow-1; row++){
-    if((array[row]=calloc(ncol,size))==NULL){
+  for(row=0; row<nrow; row++){
+    if((array[row]=calloc(2*ncol,size))==NULL){
       fprintf(sp0,"Out of memory\n");
       exit(ABNORMAL_EXIT);
     }
   }
-  for(row=nrow-1; row<2*nrow-1; row++){
-    if((array[row]=calloc((ncol-1),size))==NULL){
+  for(; row<2*nrow; row++){
+    if((array[row]=calloc(2*ncol,size))==NULL){
       fprintf(sp0,"Out of memory\n");
       exit(ABNORMAL_EXIT);
     }
@@ -530,12 +532,12 @@ void Free2DArray(void **array, unsigned int nrow){
 }
 
 
-/* function: Set2DShortArray()
+/* function: Set2DIntArray()
  * -------------------------
- * Sets all entries of a 2D array of shorts to the given value.  Assumes
+ * Sets all entries of a 2D array of ints to the given value.  Assumes
  * that memory is already allocated.
  */
-void Set2DShortArray(short **arr, long nrow, long ncol, long value){
+void Set2DIntArray(int **arr, long nrow, long ncol, long value){
 
   long row, col;
 
@@ -576,7 +578,7 @@ signed char ValidDataArray(float **arr, long nrow, long ncol){
  */
 signed char IsFinite(double d){
 
-  return(finite(d));
+  return(isfinite(d));
   /* return(isfinite(d)); */
   /* return(!(isnan(d) || isinf(d))); */
   /* return(TRUE) */
@@ -594,13 +596,13 @@ long LRound(double a){
 }
 
 
-/* function: Short2DRowColAbsMax()
+/* function: Int2DRowColAbsMax()
  * -------------------------------
  * Returns the maximum of the absolute values of element in a
- * two-dimensional short array.  The number of rows and columns
+ * two-dimensional int array.  The number of rows and columns
  * should be passed in.
  */
-long Short2DRowColAbsMax(short **arr, long nrow, long ncol){
+long Int2DRowColAbsMax(int **arr, long nrow, long ncol){
 
   long row, col, maxval;
 
@@ -679,8 +681,8 @@ void Despeckle(float **mag, float ***ei, long nrow, long ncol){
   float **intensity;
   double ratio, ratiomax, wfull, wstick, w[NARMS+1];
   long row, col, i, j, k, Irow, Icol;
-  short jmin[5]={2,2,0,1,2};
-  short jmax[5]={2,3,4,3,2};
+  int jmin[5]={2,2,0,1,2};
+  int jmax[5]={2,3,4,3,2};
   enum{ C=0, T, B, R, L, TR, BL, TL, BR};
 
   /* get memory for output array */
@@ -880,7 +882,6 @@ void BoxCarAvg(float **avgarr, float **padarr, long nrow, long ncol,
 char *StrNCopy(char *dest, const char *src, size_t n){
 
   char *s;
-
   s=strncpy(dest,src,n-1);
   dest[n-1]='\0';
   return(s);
@@ -902,7 +903,7 @@ void FlattenWrappedPhase(float **wrappedphase, float **unwrappedest,
   for(row=0;row<nrow;row++){
     for(col=0;col<ncol;col++){
       wrappedphase[row][col]-=unwrappedest[row][col];
-      wrappedphase[row][col]=fmod(wrappedphase[row][col],TWOPI);
+      wrappedphase[row][col]=fmod(wrappedphase[row][col],(float)TWOPI);
       if(wrappedphase[row][col]<0){
 	wrappedphase[row][col]+=TWOPI;
       }
@@ -935,14 +936,13 @@ void Add2DFloatArrays(float **arr1, float **arr2, long nrow, long ncol){
  * If any part of the string is not converted, the function does not make
  * the assignment and returns TRUE.  Otherwise, returns FALSE.
  */
-int StringToDouble(char *str, double *d){
+int StringToDouble(const char *str, double *d){
 
   double tempdouble;
-  char *endp;
-
-  endp=str;
+  char *endp = NULL;
+  
   tempdouble=strtod(str,&endp);
-  if(strlen(endp) || tempdouble>=HUGE_VAL || tempdouble<=-HUGE_VAL){
+  if((endp && strlen(endp)) || tempdouble>=HUGE_VAL || tempdouble<=-HUGE_VAL){
     return(TRUE);
   }else{
     *d=tempdouble;
@@ -957,14 +957,13 @@ int StringToDouble(char *str, double *d){
  * checking.  If any part of the string is not converted, the function does
  * not make the assignment and returns TRUE.  Otherwise, returns FALSE.
  */
-int StringToLong(char *str, long *l){
+int StringToLong(const char *str, long *l){
 
   long templong;
-  char *endp;
-
-  endp=str;
+  char *endp = NULL;
+  
   templong=strtol(str,&endp,10);
-  if(strlen(endp) || templong==LONG_MAX || templong==LONG_MIN){
+  if((endp && strlen(endp)) || templong==LONG_MAX || templong==LONG_MIN){
     return(TRUE);
   }else{
     *l=templong;
@@ -980,18 +979,19 @@ int StringToLong(char *str, long *l){
  * Note that SIGKILL usually cannot be caught.  No return value.
  */
 void CatchSignals(void (*SigHandler)(int)){
-
-  signal(SIGHUP,SigHandler);
+#ifdef __GNUC__
+	signal(SIGHUP, SigHandler);
+	signal(SIGQUIT, SigHandler);
+	signal(SIGPIPE, SigHandler);
+	signal(SIGALRM, SigHandler);
+	signal(SIGBUS, SigHandler);
+#endif
   signal(SIGINT,SigHandler);
-  signal(SIGQUIT,SigHandler);
   signal(SIGILL,SigHandler);
   signal(SIGABRT,SigHandler);
   signal(SIGFPE,SigHandler);
   signal(SIGSEGV,SigHandler);
-  signal(SIGPIPE,SigHandler);
-  signal(SIGALRM,SigHandler);
   signal(SIGTERM,SigHandler);
-  signal(SIGBUS,SigHandler);
 }
 
 
@@ -1015,7 +1015,9 @@ void SetDump(int signum){
     dumpresults_global=TRUE;
     requestedstop_global=TRUE;
 
-  }else if(signum==SIGHUP){
+  }
+#ifdef __GNUC__
+  else if(signum==SIGHUP){
 
     /* make sure the hangup signal doesn't revert to default behavior */
     signal(SIGHUP,SetDump);
@@ -1024,7 +1026,9 @@ void SetDump(int signum){
     fprintf(sp0,"\n\nSIGHUP signal caught.  Dumping results\n");
     dumpresults_global=TRUE;
 
-  }else{
+  }
+#endif
+  else{
     fprintf(sp0,"WARNING: Invalid signal (%d) passed to signal handler\n",
 	    signum);
   }
@@ -1042,7 +1046,9 @@ void KillChildrenExit(int signum){
 	  signum);
   fflush(NULL);
   signal(SIGTERM,SIG_IGN);
+#ifdef __GNUC__
   kill(0,SIGTERM);
+#endif
   exit(ABNORMAL_EXIT);
 
 }
@@ -1068,7 +1074,7 @@ void SignalExit(int signum){
  * DisplayElapsedTime().
  */
 void StartTimers(time_t *tstart, double *cputimestart){
-
+#ifdef __GNUC__
   struct rusage usagebuf;
 
   *tstart=time(NULL);
@@ -1085,6 +1091,7 @@ void StartTimers(time_t *tstart, double *cputimestart){
 			       +(usagebuf.ru_stime.tv_usec/(double )1000000));
     }
   }
+#endif
 }
 
 
@@ -1098,7 +1105,7 @@ void StartTimers(time_t *tstart, double *cputimestart){
  * functions.
  */
 void DisplayElapsedTime(time_t tstart, double cputimestart){
-
+#ifdef __GNUC__
   double cputime, walltime, seconds;
   long hours, minutes;
   time_t tstop;
@@ -1134,6 +1141,7 @@ void DisplayElapsedTime(time_t tstart, double cputimestart){
     fprintf(sp1,"Elapsed wall clock time:  %ld:%02ld:%02ld\n",
 	    hours,minutes,(long )seconds);
   }
+#endif
 }
 
 
